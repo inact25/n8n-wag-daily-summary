@@ -1,73 +1,427 @@
-# n8n-wag-chat-summary
+# n8n-wag-daily-summary
 
-[n8n](https://n8n.io) workflows that post a **daily summary of a WhatsApp group chat**.
-Messages come in through [go-whatsapp-web-multidevice](https://github.com/aldinokemal/go-whatsapp-web-multidevice)
-("go-wa"), are stored in Postgres, and once a day are summarized by Google Gemini and sent
-back to a WhatsApp number via go-wa.
+> Daily WhatsApp group chat summaries with [n8n](https://n8n.io),
+> [go-whatsapp-web-multidevice](https://github.com/aldinokemal/go-whatsapp-web-multidevice),
+> Postgres, and Google Gemini.
 
-The daily message looks like:
+This project automatically collects a WhatsApp group's messages throughout the day and, every
+night, uses an LLM to post a clean, structured **daily summary** (topics discussed + action
+items + stats) back to a WhatsApp number. It handles **many groups at once** — each active group
+gets its own summary sent to its own recipient.
+
+The whole thing ships as **exported n8n workflow JSON** — there is no application code and no
+build step. You import the workflows into your own n8n instance, add credentials, and run.
+
+---
+
+## Table of contents
+
+- [Example output](#example-output)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Repository structure](#repository-structure)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+  - [1. Database](#1-database)
+  - [2. go-wa (WhatsApp gateway)](#2-go-wa-whatsapp-gateway)
+  - [3. Import the workflows](#3-import-the-workflows)
+  - [4. Create credentials](#4-create-credentials)
+  - [5. Set configuration values](#5-set-configuration-values)
+  - [6. Register your groups](#6-register-your-groups)
+  - [7. Wire up error alerts](#7-wire-up-error-alerts)
+  - [8. Activate](#8-activate)
+- [How it works](#how-it-works)
+- [Configuration reference](#configuration-reference)
+- [Managing groups](#managing-groups)
+- [Customization](#customization)
+- [Operations & monitoring](#operations--monitoring)
+- [Troubleshooting](#troubleshooting)
+- [Cost](#cost)
+- [Security](#security)
+- [Regenerating the workflow JSON](#regenerating-the-workflow-json)
+
+---
+
+## Example output
 
 ```
 WHNYHProject Daily Summary
 📅 02 Juli 2026
 
 Topik Dibahas:
-- ...
+- UI/Design review & roasting — tampilan perlu perbaikan, Javapixa Studio handle UI
+- Knowledge Base (KB) bermasalah — ada instruksi mencurigakan, perlu dicek
+- Multi-service masih fail — error pada multi-service
 
 Pesan Penting / Action Items:
-- ...
+- Benerin KB yang ada instruksi aneh (Indra & Javapixa Studio)
+- Multi-service perlu di-fix (Javapixa Studio)
 
 Statistik:
 - Total pesan: 114
-- Anggota aktif: 5 orang (...)
+- Anggota aktif: 5 orang (Indra, Angga Pixa, Javapixa Studio, rohimdev.com, Ibrahim)
 ```
 
-It handles **many groups** — each active group in the `wag_groups` table gets its own daily
-summary sent to its own recipient. This repository holds **exported workflow JSON only** —
-there is no custom code or build step.
+---
 
-## Layout
+## Features
+
+- **Multi-group** — summarize any number of groups from one workflow; add/remove a group by
+  editing a database row, no workflow changes.
+- **Real-time ingestion** — every incoming message is captured via webhook and stored.
+- **Deduplication** — `message_id` is unique; webhook retries never double-count.
+- **Structured LLM output** — Gemini is forced (via a JSON schema) to return `topics[]` and
+  `action_items[]`; the message is rendered deterministically, not parsed from free text.
+- **Exact statistics** — message counts and active members are computed from the database, never
+  guessed by the LLM.
+- **Idempotent + auditable** — one row per group per day in `wag_summaries` (status
+  `success`/`empty`/`error`); re-runs upsert.
+- **Fault-isolated** — if one group fails (or Gemini hiccups), the others still complete.
+- **Failure alerts** — an Error Trigger workflow sends you a WhatsApp message when anything breaks.
+- **Guardrails** — transcript size cap for runaway high-volume days; media stored as
+  `[image]`/`[video]`/… with captions.
+
+---
+
+## Architecture
+
+Ingestion (real-time) and summarization (nightly batch) are decoupled, because go-wa cannot
+return "all of today's messages" in a single call. They communicate through three Postgres tables.
 
 ```
-workflows/
-  wag-chat-ingest.json     go-wa webhook → normalize → Postgres (dedupe)
-  wag-daily-summary.json   schedule 23:00 WIB → loop groups → Gemini → send → log
-  wag-error-alert.json     Error Trigger → go-wa alert to admin on any failure
-db/
-  schema.sql               wag_groups, wag_messages, wag_summaries
-CLAUDE.md                  architecture + setup notes
+  wag-chat-ingest.json                          wag-daily-summary.json
+  ────────────────────                          ──────────────────────
+  WhatsApp group                                Every day 23:00 (Asia/Jakarta)
+       │                                                │
+     go-wa ──(webhook)──▶ go-wa Webhook          Get Active Groups ──▶ wag_groups
+                             │                          │
+                    Normalize Payload             Loop Over Groups ──done──▶ All Groups Done
+                     (fields + media)                   │  (one iteration per group)
+                             │                          ▼
+                    Group message w/ text?      Get Today's Messages ──▶ wag_messages
+                             │ yes                       │
+                             ▼                    Build Transcript (+ exact stats + prompt)
+                     Upsert Message                      │
+                             │                    Any messages today?
+                             ▼                     ├─ yes ▶ Summarize (LLM Chain)
+                       wag_messages                │         ├── Google Gemini Chat Model
+                     (dedupe message_id)           │         └── Structured Output Parser
+                                                   │             ▶ Render Summary
+                                                   └─ no  ▶ No Activity Message
+                                                          │
+                                                   Send via go-wa ──▶ Log Summary ──▶ wag_summaries
+                                                          └──────────── loops back to Loop ──────────┘
+
+  wag-error-alert.json:  On Workflow Error ──▶ Build Alert ──▶ Send Alert via go-wa
+  (set as the "Error Workflow" of the two workflows above)
 ```
+
+---
+
+## Tech stack
+
+| Component | Role |
+|-----------|------|
+| **n8n** | Orchestration / workflow engine (self-hosted recommended). |
+| **go-whatsapp-web-multidevice** ("go-wa") | WhatsApp gateway — receives messages (webhook) and sends messages (REST API). |
+| **PostgreSQL** | Stores the group registry, ingested messages, and the daily run log. |
+| **Google Gemini** (`gemini-2.5-flash`) | Writes the topic/action-item narrative via n8n's native LangChain nodes. |
+
+---
+
+## Repository structure
+
+```
+.
+├── workflows/
+│   ├── wag-chat-ingest.json     # go-wa webhook → normalize → Postgres (dedupe)
+│   ├── wag-daily-summary.json   # schedule 23:00 → loop groups → Gemini → send → log
+│   └── wag-error-alert.json     # Error Trigger → WhatsApp alert to admin
+├── db/
+│   └── schema.sql               # wag_groups, wag_messages, wag_summaries
+├── CLAUDE.md                    # architecture notes for AI coding assistants
+└── README.md
+```
+
+---
+
+## Prerequisites
+
+- A running **n8n** instance (v1.x). Self-hosted is recommended so go-wa can reach its webhook.
+- A running **go-wa** instance, already logged in to the WhatsApp account, with:
+  - its REST API reachable from n8n (default `http://localhost:3000`), and
+  - HTTP Basic Auth enabled.
+- A **PostgreSQL** database n8n can connect to.
+- A **Google AI Studio API key** for Gemini (<https://aistudio.google.com/app/apikey>).
+
+---
 
 ## Setup
 
-1. Run `db/schema.sql` on your Postgres database.
-2. Register groups: insert rows into `wag_groups` (`chat_jid`, `project_name`, `send_to`).
-   See the seed example at the bottom of `db/schema.sql`.
-3. Import both files under `workflows/` into n8n (*Add workflow → Import from File*).
-4. Create and assign three credentials: Postgres, HTTP Header Auth for Gemini
-   (`x-goog-api-key`), and HTTP Basic Auth for go-wa.
-5. Set your **go-wa base URL** in the summary workflow's `Send via go-wa` node
-   (default `http://localhost:3000`).
-6. Point go-wa's webhook at `https://<n8n-host>/webhook/wag-incoming`, then activate the
-   ingest and summary workflows.
-7. Optional but recommended: import `wag-error-alert.json`, set the admin phone in its
-   `Build Alert` node (default `6285609200000`), and in **both** other workflows set
-   *Settings → Error Workflow* to **WAG Chat — Error Alert** so failures ping you on WhatsApp.
+### 1. Database
 
-## Adding / removing groups
+Run the schema against your Postgres database:
 
-No workflow edits — just change the registry:
-
-```sql
-INSERT INTO wag_groups (chat_jid, project_name, send_to)
-VALUES ('1203...@g.us', 'WHNYHProject', '6285609200000');
-
-UPDATE wag_groups SET active = false WHERE chat_jid = '1203...@g.us';  -- pause a group
+```bash
+psql "$DATABASE_URL" -f db/schema.sql
 ```
 
-See [CLAUDE.md](CLAUDE.md) for the full architecture and the go-wa payload/API details.
+This creates three tables:
 
-## Credentials
+| Table | Purpose |
+|-------|---------|
+| `wag_groups` | Registry of groups to summarize. The summary workflow loops over every `active` row. |
+| `wag_messages` | Every ingested group message (deduped on `message_id`). |
+| `wag_summaries` | One row per group per day: counts, status, and the sent text. |
 
-Credentials (Gemini API key, go-wa auth, DB password) live inside n8n, never in the workflow
-JSON or in this repo. Do not commit `.env` files or real secrets.
+### 2. go-wa (WhatsApp gateway)
+
+Follow the [go-wa docs](https://github.com/aldinokemal/go-whatsapp-web-multidevice) to run the
+gateway and log in. Two things must be configured:
+
+- **Basic auth** — so n8n can authenticate when sending messages.
+- **Webhook** — point go-wa's webhook at the ingest workflow's production URL (set in step 8):
+
+  ```
+  https://<your-n8n-host>/webhook/wag-incoming
+  ```
+
+  (The exact flag/env for the webhook URL varies by go-wa version — check its docs; it's
+  typically a `--webhook` flag or `WHATSAPP_WEBHOOK` setting.)
+
+To find a group's JID (needed in step 6), call go-wa's `GET /user/my/groups`, or read the
+`chat_id` field of any incoming message once ingestion is running. A group JID looks like
+`1203XXXXXXXXXXXXXX@g.us`.
+
+### 3. Import the workflows
+
+In n8n: **Add workflow → ⋯ menu → Import from File**, and import each file under `workflows/`.
+Or via the CLI on a self-hosted instance:
+
+```bash
+n8n import:workflow --input=workflows/wag-chat-ingest.json
+n8n import:workflow --input=workflows/wag-daily-summary.json
+n8n import:workflow --input=workflows/wag-error-alert.json
+```
+
+### 4. Create credentials
+
+Create these three credentials in n8n and assign them to the nodes that use them (imported nodes
+carry placeholder credential IDs you must replace):
+
+| Credential type | Used by | Notes |
+|-----------------|---------|-------|
+| **Postgres** | `Upsert Message`, `Get Active Groups`, `Get Today's Messages`, `Log Summary` | Your database connection. |
+| **Google Gemini (PaLM) API** | `Google Gemini Chat Model` | Paste your Google AI Studio API key. |
+| **HTTP Basic Auth** | `Send via go-wa`, `Send Alert via go-wa` | Your go-wa username/password. |
+
+### 5. Set configuration values
+
+| What | Where |
+|------|-------|
+| **go-wa base URL** | `Send via go-wa` (summary) and `Send Alert via go-wa` (error) — the URL field, default `http://localhost:3000`. |
+| **Admin alert number** | `Build Alert` node in `wag-error-alert.json` — default `6285609200000`. |
+| **Schedule / timezone / model / message format** | See [Customization](#customization). |
+
+### 6. Register your groups
+
+Insert one row per group you want summarized:
+
+```sql
+INSERT INTO wag_groups (chat_jid, project_name, send_to) VALUES
+  ('1203XXXXXXXXXXXXXX@g.us', 'WHNYHProject', '6285609200000'),
+  ('1203YYYYYYYYYYYYYY@g.us', 'Project B',    '6281234567890');
+```
+
+- `chat_jid` — the WhatsApp group JID (`...@g.us`).
+- `project_name` — shown in the summary header (`<project_name> Daily Summary`).
+- `send_to` — phone number that receives this group's summary (digits only, no `+`).
+
+### 7. Wire up error alerts
+
+For each of `wag-chat-ingest` and `wag-daily-summary`, open **Settings → Error Workflow** and
+select **WAG Chat — Error Alert**. The Error Trigger only fires for workflows that name it, and
+the link can't be pre-baked into the JSON because workflow IDs don't exist until after import.
+
+### 8. Activate
+
+- Activate **WAG Chat — Ingest**, then copy its **Production URL** (from the `go-wa Webhook` node)
+  into go-wa's webhook setting (step 2).
+- Activate **WAG Chat — Daily Summary**. It will run every night at 23:00 Asia/Jakarta.
+
+To test the summary immediately, open it and click **Execute Workflow** — it summarizes whatever
+is already in `wag_messages` for today.
+
+---
+
+## How it works
+
+### Ingestion (`wag-chat-ingest`)
+
+1. **go-wa Webhook** receives a `POST` from go-wa for every incoming message.
+2. **Normalize Payload** maps the (version-dependent) go-wa payload to flat fields, detects media
+   type (`image`/`video`/…), and keeps the raw payload in `wag_messages.raw` for debugging.
+3. **Group message with text?** keeps only group messages (`...@g.us`) that have text/caption.
+4. **Upsert Message** inserts into `wag_messages` with `ON CONFLICT (message_id) DO NOTHING`.
+
+### Summary (`wag-daily-summary`)
+
+1. **Every day 23:00** triggers the run (timezone `Asia/Jakarta`).
+2. **Get Active Groups** reads all `active` rows from `wag_groups`.
+3. **Loop Over Groups** iterates one group at a time (batch size 1).
+4. **Get Today's Messages** pulls that group's messages for "today" in Asia/Jakarta.
+5. **Build Transcript** assembles a timestamped transcript, computes exact stats (total messages,
+   distinct senders), formats the Indonesian date, and builds the LLM prompt. A `MAX_CHARS` cap
+   trims very large days.
+6. **Any messages today?** branches:
+   - **Yes →** **Summarize (LLM Chain)** runs **Google Gemini Chat Model** with a **Structured
+     Output Parser** that enforces `{ topics[], action_items[] }`. **Render Summary** turns that
+     object + the DB stats into the final message.
+   - **No →** **No Activity Message** produces a short "no activity today" note.
+7. **Send via go-wa** sends the message to the group's `send_to` number.
+8. **Log Summary** upserts the run into `wag_summaries`, then the loop continues to the next group.
+
+### Error alerts (`wag-error-alert`)
+
+**On Workflow Error** fires when a linked workflow fails; **Build Alert** formats the workflow
+name, failing node, and error message; **Send Alert via go-wa** sends it to the admin number.
+
+---
+
+## Configuration reference
+
+| Setting | Default | Location |
+|---------|---------|----------|
+| Webhook path | `wag-incoming` | `go-wa Webhook` node (ingest) |
+| Run time | `23:00` | `Every day 23:00` node → hour/minute |
+| Timezone | `Asia/Jakarta` | each workflow's **Settings → Timezone** |
+| LLM model | `gemini-2.5-flash` | `Google Gemini Chat Model` node |
+| LLM temperature | `0.3` | `Google Gemini Chat Model` node options |
+| Transcript cap | `40000` chars | `MAX_CHARS` in `Build Transcript` code |
+| go-wa base URL | `http://localhost:3000` | `Send via go-wa` / `Send Alert via go-wa` URL |
+| Admin alert number | `6285609200000` | `Build Alert` code |
+| Groups & recipients | — | `wag_groups` table |
+
+---
+
+## Managing groups
+
+No workflow edits required — just change the registry table:
+
+```sql
+-- Add a group
+INSERT INTO wag_groups (chat_jid, project_name, send_to)
+VALUES ('1203...@g.us', 'New Project', '6285609200000');
+
+-- Pause a group (keeps history, stops summaries)
+UPDATE wag_groups SET active = false WHERE chat_jid = '1203...@g.us';
+
+-- Re-enable it
+UPDATE wag_groups SET active = true WHERE chat_jid = '1203...@g.us';
+
+-- Change who receives a group's summary
+UPDATE wag_groups SET send_to = '6281234567890' WHERE chat_jid = '1203...@g.us';
+
+-- Remove a group entirely
+DELETE FROM wag_groups WHERE chat_jid = '1203...@g.us';
+```
+
+---
+
+## Customization
+
+- **Change the run time** — edit the `Every day 23:00` schedule node. Running at 23:00 summarizes
+  the current day; if you prefer next-morning, set e.g. 08:00 and adjust the SQL date window in
+  `Get Today's Messages` to "yesterday".
+- **Change the timezone** — set it in each workflow's **Settings → Timezone**, and update the
+  `Asia/Jakarta` strings in `Build Transcript` and the `Get Today's Messages` query.
+- **Change the model** — set `models/<name>` on `Google Gemini Chat Model` (e.g. a Pro model for
+  higher quality, a Flash-Lite model for lower cost).
+- **Change the message layout** — edit `Render Summary` (and `No Activity Message`). These build
+  the final text deterministically; the header, sections, and stats live here.
+- **Change the summary sections** — edit the JSON schema in `Structured Output Parser` and the
+  prompt in `Build Transcript` together, then reflect the new fields in `Render Summary`.
+- **Change the language** — the prompt in `Build Transcript` and the month names / labels in the
+  code nodes are Indonesian; translate them as needed.
+
+---
+
+## Operations & monitoring
+
+Handy SQL against the database:
+
+```sql
+-- Recent runs and their outcome
+SELECT summary_date, chat_jid, status, message_count, member_count, created_at
+FROM wag_summaries ORDER BY created_at DESC LIMIT 20;
+
+-- Is ingestion flowing? (should keep increasing)
+SELECT count(*) AS total, max("timestamp") AS latest FROM wag_messages;
+
+-- Messages per group today (Asia/Jakarta)
+SELECT chat_jid, count(*)
+FROM wag_messages
+WHERE ("timestamp" AT TIME ZONE 'Asia/Jakarta') >= date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta')
+GROUP BY chat_jid;
+
+-- Runs that errored
+SELECT * FROM wag_summaries WHERE status = 'error' ORDER BY created_at DESC;
+```
+
+In n8n itself, use **Executions** to inspect individual runs of each workflow.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause / fix |
+|---------|--------------------|
+| No rows appearing in `wag_messages` | go-wa webhook not pointing at `…/webhook/wag-incoming`, or the ingest workflow isn't **active**. Check go-wa logs and n8n Executions. |
+| `chat_jid` / `sender_name` / `message` stored blank | go-wa payload field names differ by version. Open a `raw` row and adjust the mappings in `Normalize Payload`. |
+| Summary sends but stats say `0` / "no activity" | Nothing stored for that group today, or the group JID in `wag_groups` doesn't match what's ingested. Compare `chat_jid` values. |
+| Gemini errors / empty narrative | Bad/expired API key on `Google Gemini Chat Model`, quota exhausted, or model name typo. The run is still logged with status `error`. |
+| Message not delivered | Wrong go-wa base URL / basic-auth credential, `send_to` not in international digits (no `+`), or go-wa not logged in. |
+| Postgres node errors on import | n8n version differs from the exported node version (see below). Re-open and re-save the node. |
+
+**Version-sensitive spots** (glance at these after importing into a different n8n version):
+
+- **Loop Over Groups** outputs — expected order is **0 = done, 1 = loop**. If reversed, swap the
+  two connections.
+- **Postgres** parameterized inserts use `queryReplacement` (node typeVersion 2.6).
+- Native LangChain nodes: `chainLlm` 1.6, `lmChatGoogleGemini` 1, `outputParserStructured` 1.2.
+
+---
+
+## Cost
+
+Gemini cost scales with transcript size. As a rule of thumb, a busy group of ~1,000 messages/day
+is ~25k input tokens per run. Ten such groups is roughly **a few US dollars per month** on
+`gemini-2.5-flash`, and well under a dollar on a Flash-Lite model — verify current pricing at
+<https://ai.google.dev/pricing>. One Gemini call per group per day keeps this the cheapest option.
+
+---
+
+## Security
+
+- Secrets (Gemini key, go-wa basic auth, DB password) live **only** in n8n credentials — never in
+  the workflow JSON or this repo. Do not commit `.env` files or real credential values.
+- The `Get Today's Messages` query inlines the group JID from your own `wag_groups` table (trusted
+  data); all values derived from chat content are passed as **bound parameters**, not string-
+  concatenated into SQL.
+- go-wa should be reachable only from your n8n instance (private network / firewall), not exposed
+  publicly.
+
+---
+
+## Regenerating the workflow JSON
+
+The workflow files are generated by a small Node script that builds the workflow objects and
+`JSON.stringify`s them — this keeps the embedded Code-node JavaScript readable and guarantees
+valid JSON. For **small** changes, edit in the n8n UI and re-export
+(`n8n export:workflow --all --output=workflows/ --pretty`). For **structural** changes across many
+nodes, regenerate. Always validate a hand-edit:
+
+```bash
+node -e "JSON.parse(require('fs').readFileSync('workflows/wag-daily-summary.json'))"
+```
