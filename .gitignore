@@ -1,0 +1,16 @@
+# Secrets — never commit
+.env
+.env.*
+*.local
+credentials.json
+*credentials*.json
+
+# n8n local data
+.n8n/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# IntelliJ workspace (keep shared config, drop per-user state)
+.idea/workspace.xml
