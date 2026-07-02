@@ -32,6 +32,7 @@ there is no custom code or build step.
 workflows/
   wag-chat-ingest.json     go-wa webhook → normalize → Postgres (dedupe)
   wag-daily-summary.json   schedule 23:00 WIB → loop groups → Gemini → send → log
+  wag-error-alert.json     Error Trigger → go-wa alert to admin on any failure
 db/
   schema.sql               wag_groups, wag_messages, wag_summaries
 CLAUDE.md                  architecture + setup notes
@@ -47,8 +48,11 @@ CLAUDE.md                  architecture + setup notes
    (`x-goog-api-key`), and HTTP Basic Auth for go-wa.
 5. Set your **go-wa base URL** in the summary workflow's `Send via go-wa` node
    (default `http://localhost:3000`).
-6. Point go-wa's webhook at `https://<n8n-host>/webhook/wag-incoming`, then activate both
-   workflows.
+6. Point go-wa's webhook at `https://<n8n-host>/webhook/wag-incoming`, then activate the
+   ingest and summary workflows.
+7. Optional but recommended: import `wag-error-alert.json`, set the admin phone in its
+   `Build Alert` node (default `6285609200000`), and in **both** other workflows set
+   *Settings → Error Workflow* to **WAG Chat — Error Alert** so failures ping you on WhatsApp.
 
 ## Adding / removing groups
 

@@ -76,7 +76,12 @@ in one call.
    - **HTTP Basic Auth** for go-wa — on `Send via go-wa`.
 4. Set the **go-wa base URL** in the `Send via go-wa` node URL (default `http://localhost:3000`).
    It's defined once, in `scratchpad`-generated JSON via the `GOWA_BASE` constant if regenerating.
-5. Point go-wa's webhook at `https://<n8n-host>/webhook/wag-incoming`; activate both workflows.
+5. Point go-wa's webhook at `https://<n8n-host>/webhook/wag-incoming`; activate the ingest and
+   summary workflows.
+6. **Error alerts:** import `wag-error-alert.json` (an Error Trigger → go-wa message; set the
+   admin number in its `Build Alert` node). Then in **both** other workflows set
+   *Settings → Error Workflow* to it — the trigger only fires for workflows that name it. This is
+   the only cross-workflow link and must be set after import (IDs don't exist until then).
 
 ## go-wa integration facts
 

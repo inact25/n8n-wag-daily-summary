@@ -1,0 +1,85 @@
+{
+  "name": "WAG Chat — Error Alert",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "er-trigger",
+      "name": "On Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $json;\nconst ex = e.execution || {};\nconst wf = e.workflow || {};\nconst err = ex.error || {};\nconst t = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });\nconst message =\n  '⚠️ n8n Workflow Error\\n' +\n  'Workflow: ' + (wf.name || '-') + '\\n' +\n  'Node: ' + (ex.lastNodeExecuted || '-') + '\\n' +\n  'Error: ' + (err.message || '-') + '\\n' +\n  'Mode: ' + (ex.mode || '-') + '\\n' +\n  'Waktu: ' + t + (ex.url ? '\\nExecution: ' + ex.url : '');\nreturn [{ json: { phone: '6285609200000', message } }];"
+      },
+      "id": "er-build",
+      "name": "Build Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/send/message",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone: $json.phone, message: $json.message }) }}",
+        "options": {}
+      },
+      "id": "er-send",
+      "name": "Send Alert via go-wa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_WITH_GOWA_BASIC_CRED_ID",
+          "name": "go-wa basic auth"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "On Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Build Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Alert via go-wa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta"
+  },
+  "pinData": {}
+}
