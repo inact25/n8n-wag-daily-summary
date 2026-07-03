@@ -322,7 +322,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r = $json;\nlet arr = (r.results && (r.results.data || r.results)) || r.data || r.groups || [];\nif (!Array.isArray(arr)) arr = [];\nconst lines = arr.map(g => '• ' + (g.name || g.subject || '(tanpa nama)') + '  —  ' + (g.JID || g.jid || g.id || ''));\nconst resultMessage = arr.length\n  ? ('Ditemukan ' + arr.length + ' grup. Salin JID (…@g.us) lalu pakai aksi \"' + 'Save group (add or update)' + '\":\\n\\n' + lines.join('\\n'))\n  : 'go-wa tidak mengembalikan grup. Cek kredensial / URL go-wa.';\nreturn [{ json: { resultMessage } }];"
+        "jsCode": "const r = $json;\nconst res = r.results || r;\nlet arr = res.groups || res.data || (Array.isArray(res) ? res : []);\nif (!Array.isArray(arr)) arr = [];\nconst lines = arr.map(g => '• ' + (g.name || g.subject || '(tanpa nama)') + '  —  ' + (g.JID || g.jid || g.id || ''));\nconst resultMessage = arr.length\n  ? ('Ditemukan ' + arr.length + ' grup. Salin JID (…@g.us) lalu pakai aksi \"' + 'Save group (add or update)' + '\":\\n\\n' + lines.join('\\n'))\n  : 'go-wa tidak mengembalikan grup. Cek kredensial / URL go-wa.';\nreturn [{ json: { resultMessage } }];"
       },
       "id": "ad-fmt-gowa",
       "name": "Format go-wa Groups",
@@ -414,7 +414,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r = $json;\nlet arr = (r.results && (r.results.data || r.results)) || r.data || r.groups || [];\nif (!Array.isArray(arr)) arr = [];\nconst sendTo = $('Admin Form').first().json['Send to number'];\nif (!sendTo) throw new Error('Isi kolom \"Send to number\" untuk bulk register (dipakai untuk semua grup).');\nconst rows = arr\n  .map(g => ({ chat_jid: g.JID || g.jid || g.id || '', project_name: g.name || g.subject || 'Group', send_to: sendTo }))\n  .filter(x => String(x.chat_jid).endsWith('@g.us'));\nif (!rows.length) throw new Error('go-wa tidak mengembalikan grup untuk didaftarkan.');\nreturn rows.map(x => ({ json: x }));"
+        "jsCode": "const r = $json;\nconst res = r.results || r;\nlet arr = res.groups || res.data || (Array.isArray(res) ? res : []);\nif (!Array.isArray(arr)) arr = [];\nconst sendTo = $('Admin Form').first().json['Send to number'];\nif (!sendTo) throw new Error('Isi kolom \"Send to number\" untuk bulk register (dipakai untuk semua grup).');\nconst rows = arr\n  .map(g => ({ chat_jid: g.JID || g.jid || g.id || '', project_name: g.name || g.subject || 'Group', send_to: sendTo }))\n  .filter(x => String(x.chat_jid).endsWith('@g.us'));\nif (!rows.length) throw new Error('go-wa tidak mengembalikan grup untuk didaftarkan.');\nreturn rows.map(x => ({ json: x }));"
       },
       "id": "ad-map",
       "name": "Map Groups to Rows",

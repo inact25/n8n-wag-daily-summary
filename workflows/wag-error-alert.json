@@ -43,7 +43,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ phone: $json.phone, message: $json.message }) }}",
+        "jsonBody": "={{ JSON.stringify({ phone: String($json.phone).includes('@') ? $json.phone : $json.phone + '@s.whatsapp.net', message: $json.message }) }}",
         "options": {}
       },
       "id": "er-send",

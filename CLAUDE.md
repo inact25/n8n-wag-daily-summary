@@ -100,7 +100,13 @@ generator) — keep all three in sync if you change columns.
 
 ## go-wa integration facts
 
-- **Send:** `POST {baseUrl}/send/message`, HTTP Basic Auth, JSON `{ "phone": "<digits,no +>", "message": "<text>" }`.
+- **API contract** (from go-wa `docs/openapi.yaml`): all device-scoped calls need the device id via
+  the `X-Device-Id` header (or `?device_id=`); `/health` and `/app/devices` are exempt.
+- **Send:** `POST {baseUrl}/send/message`, HTTP Basic Auth, JSON `{ "phone": "<jid>", "message": "<text>" }`.
+  `phone` is a JID; the send body appends `@s.whatsapp.net` when only digits are given.
+- **List groups:** `GET {baseUrl}/user/my/groups` → array at **`results.groups[]`**, each with `id`
+  (the `…@g.us` JID) and `subject` (name). The group-list Code nodes read `results.groups`.
+- **Devices:** `GET {baseUrl}/app/devices` → `results.devices[].device_id` (e.g. `org_2`).
 - **Webhook payload field names vary by go-wa version.** `Normalize Payload` uses fallbacks
   (`chat_id`/`from`, `pushname`, `message.text`/`message.conversation`, media objects) and stores
   the full payload in `wag_messages.raw`. If ingested fields come out blank, inspect a `raw` row

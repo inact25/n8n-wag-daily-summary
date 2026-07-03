@@ -265,8 +265,9 @@ or in n8n's `.env`. (In the wizards you can also type the **go-wa base URL** and
 directly in the form, which take precedence for the setup actions.)
 
 > **Finding your device id:** after go-wa is logged in, call
-> `GET {GOWA_BASE_URL}/app/devices` (with the go-wa Basic Auth) — use the returned device value.
-> If go-wa returns `DEVICE_ID_REQUIRED`, this is what's missing.
+> `GET {GOWA_BASE_URL}/app/devices` (with the go-wa Basic Auth). The id is
+> `results.devices[].device_id` (e.g. `org_2`). If go-wa returns `DEVICE_ID_REQUIRED`, this is
+> what's missing.
 
 Other settings — schedule, timezone, model, message format — are covered under
 [Customization](#customization).
