@@ -155,7 +155,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const n = $('Map Groups to Rows').all().length;\nconst to = ($('Quick Setup Form').first().json['Summary recipient number'] || '').trim();\nconst resultMessage =\n  '✅ Setup selesai! ' + n + ' grup didaftarkan.\\n' +\n  'Ringkasan harian dikirim ke ' + to + ' setiap hari pukul 23:00 WIB.\\n\\n' +\n  'Pastikan workflow \"WAG Chat — Ingest\" dan \"WAG Chat — Daily Summary\" sudah Active.';\nreturn [{ json: { resultMessage } }];"
+        "jsCode": "const n = $('Map Groups to Rows').all().length;\nconst to = ($('Quick Setup Form').first().json['Summary recipient number'] || '').trim();\nconst resultMessage =\n  '✅ Setup selesai! ' + n + ' grup didaftarkan.\\n' +\n  'Ringkasan harian dikirim ke ' + to + ' setiap pagi (07:00 WIB), merangkum obrolan hari sebelumnya.\\n\\n' +\n  'Pastikan workflow \"WAG Chat — Ingest\" dan \"WAG Chat — Daily Summary\" sudah Active.';\nreturn [{ json: { resultMessage } }];"
       },
       "id": "qs-msg",
       "name": "Build Result",

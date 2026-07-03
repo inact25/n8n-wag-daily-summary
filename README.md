@@ -96,7 +96,7 @@ return "all of today's messages" in a single call. They communicate through thre
 ```
   wag-chat-ingest.json                          wag-daily-summary.json
   ────────────────────                          ──────────────────────
-  WhatsApp group                                Every day 23:00 (Asia/Jakarta)
+  WhatsApp group                                Every day 07:00 WIB (summarize yesterday)
        │                                                │
      go-wa ──(webhook)──▶ go-wa Webhook          Get Active Groups ──▶ wag_groups
                              │                          │
@@ -142,7 +142,7 @@ return "all of today's messages" in a single call. They communicate through thre
 │   ├── wag-setup.json           # Quick Setup form: 1 field → install DB + register all groups
 │   ├── wag-admin.json           # Manage Groups (Advanced): per-group add/update/remove
 │   ├── wag-chat-ingest.json     # go-wa webhook → normalize → Postgres (dedupe)
-│   ├── wag-daily-summary.json   # schedule 23:00 → loop groups → Gemini → send → log
+│   ├── wag-daily-summary.json   # schedule 07:00 → loop groups → Gemini → send → log
 │   ├── wag-error-alert.json     # Error Trigger → WhatsApp alert to admin
 │   └── wag-reset.json           # Form: wipe groups/messages/summaries/config (typed confirm)
 ├── db/
@@ -286,7 +286,7 @@ for one thing:
 - *(optional)* **go-wa URL** — only if you didn't set the `GOWA_BASE_URL` env var.
 
 Submit, and it: creates the database tables (idempotent), fetches **all** your WhatsApp groups from
-go-wa, and registers every one of them to that number — summarized nightly at 23:00. Done.
+go-wa, and registers every one of them to that number — summarized each morning at 07:00 (previous day). Done.
 
 #### Advanced: manage individual groups
 
@@ -311,7 +311,7 @@ groups* to find it; you never type it by hand for Quick Setup.
   `http://n8n:5678/webhook/wag-incoming`, so you're done — just activate. Otherwise, copy the node's
   **Production URL** (`https://<your-n8n-host>/webhook/wag-incoming`) and set it as go-wa's webhook
   (the exact flag/env varies by go-wa version — typically `--webhook` or `WHATSAPP_WEBHOOK`).
-- Activate **WAG Chat — Daily Summary**. It runs every night at 23:00 Asia/Jakarta.
+- Activate **WAG Chat — Daily Summary**. It runs daily at 07:00 Asia/Jakarta and summarizes the previous day.
 
 ### 7. Wire up error alerts (recommended)
 
@@ -342,7 +342,7 @@ Prefer SQL, or automating provisioning? You can skip the wizard's "Install datab
 
 ### Summary (`wag-daily-summary`)
 
-1. **Every day 23:00** triggers the run (timezone `Asia/Jakarta`).
+1. **Every day 07:00** triggers the run (timezone `Asia/Jakarta`); the queries below use the *previous* Jakarta day.
 2. **Get Active Groups** reads all `active` rows from `wag_groups`.
 3. **Loop Over Groups** iterates one group at a time (batch size 1).
 4. **Get Today's Messages** pulls that group's messages for "today" in Asia/Jakarta.
@@ -369,7 +369,7 @@ name, failing node, and error message; **Send Alert via go-wa** sends it to the 
 | Setting | Default | Location |
 |---------|---------|----------|
 | Webhook path | `wag-incoming` | `go-wa Webhook` node (ingest) |
-| Run time | `23:00` | `Every day 23:00` node → hour/minute |
+| Run time | `07:00` (summarize yesterday) | `Every day 07:00` node → hour/minute |
 | Timezone | `Asia/Jakarta` | each workflow's **Settings → Timezone** |
 | LLM model | `gemini-2.5-flash` | `Google Gemini Chat Model` node |
 | LLM temperature | `0.3` | `Google Gemini Chat Model` node options |
@@ -428,9 +428,12 @@ groups that had no messages that day, so pruning is optional — but this keeps 
 - **Group name in the header** — comes from `wag_groups.project_name`, set from the go-wa group name
   at registration. If a header shows `Group`/`Grup xxxx`, re-run registration or fix it via *Save
   group* / SQL `UPDATE wag_groups SET project_name = '…' WHERE chat_jid = '…'`.
-- **Change the run time** — edit the `Every day 23:00` schedule node. Running at 23:00 summarizes
-  the current day; if you prefer next-morning, set e.g. 08:00 and adjust the SQL date window in
-  `Get Today's Messages` to "yesterday".
+- **Change the run time / window** — the default is **07:00, summarizing the previous full day**
+  (00:00–24:00, no end-of-day gap). Edit the `Every day 07:00` schedule node to change the time. The
+  "previous day" window lives in three places that must stay in sync: `Get Active Groups`,
+  `Get Today's Messages` (both use `date_trunc('day', now() …) - interval '1 day'` … `< date_trunc(…)`),
+  and the `dateStr` in `Build Transcript` (`jak.setDate(jak.getDate() - 1)`), plus the `summary_date`
+  in `Log Summary`. To go back to same-night, run at 23:00 and drop the `- interval '1 day'` shifts.
 - **Change the timezone** — set it in each workflow's **Settings → Timezone**, and update the
   `Asia/Jakarta` strings in `Build Transcript` and the `Get Today's Messages` query.
 - **Change the model** — set `models/<name>` on `Google Gemini Chat Model` (e.g. a Pro model for

@@ -36,7 +36,7 @@ generator) — keep all three in sync if you change columns.
 ```
  wag-chat-ingest.json                         wag-daily-summary.json
  ────────────────────                         ─────────────────────
- go-wa ─(webhook)▶ Webhook                     Schedule 23:00 WIB
+ go-wa ─(webhook)▶ Webhook                     Schedule 07:00 WIB
                     │ Normalize (fields+media)   │ Get Active Groups (wag_groups)
                     │ IF group & non-empty        ▼
                     ▼                            Loop Over Groups ──done──▶ (end)

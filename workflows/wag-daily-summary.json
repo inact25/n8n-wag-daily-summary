@@ -1,20 +1,20 @@
 {
   "id": "wagSummary000001",
-  "name": "WAG Chat — Daily Summary (23:00 WIB, all groups)",
+  "name": "WAG Chat — Daily Summary (07:00 WIB, yesterday)",
   "nodes": [
     {
       "parameters": {
         "rule": {
           "interval": [
             {
-              "triggerAtHour": 23,
+              "triggerAtHour": 7,
               "triggerAtMinute": 0
             }
           ]
         }
       },
       "id": "su-sched",
-      "name": "Every day 23:00",
+      "name": "Every day 07:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -47,7 +47,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT g.chat_jid, g.project_name, g.send_to\nFROM wag_groups g\nWHERE g.active = true\n  AND EXISTS (\n    SELECT 1 FROM wag_messages m\n    WHERE m.chat_jid = g.chat_jid\n      AND (m.\"timestamp\" AT TIME ZONE 'Asia/Jakarta') >= date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta')\n      AND (m.\"timestamp\" AT TIME ZONE 'Asia/Jakarta') <  date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta') + interval '1 day'\n  )\nORDER BY g.project_name",
+        "query": "SELECT g.chat_jid, g.project_name, g.send_to\nFROM wag_groups g\nWHERE g.active = true\n  AND EXISTS (\n    SELECT 1 FROM wag_messages m\n    WHERE m.chat_jid = g.chat_jid\n      AND (m.\"timestamp\" AT TIME ZONE 'Asia/Jakarta') >= date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta') - interval '1 day'\n      AND (m.\"timestamp\" AT TIME ZONE 'Asia/Jakarta') <  date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta')\n  )\nORDER BY g.project_name",
         "options": {}
       },
       "id": "su-groups",
@@ -82,7 +82,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=SELECT sender_name, message, \"timestamp\"\nFROM wag_messages\nWHERE chat_jid = '{{ $json.chat_jid }}'\n  AND (\"timestamp\" AT TIME ZONE 'Asia/Jakarta') >= date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta')\n  AND (\"timestamp\" AT TIME ZONE 'Asia/Jakarta') <  date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta') + interval '1 day'\nORDER BY \"timestamp\" ASC",
+        "query": "=SELECT sender_name, message, \"timestamp\"\nFROM wag_messages\nWHERE chat_jid = '{{ $json.chat_jid }}'\n  AND (\"timestamp\" AT TIME ZONE 'Asia/Jakarta') >= date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta') - interval '1 day'\n  AND (\"timestamp\" AT TIME ZONE 'Asia/Jakarta') <  date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta')\nORDER BY \"timestamp\" ASC",
         "options": {}
       },
       "id": "su-msgs",
@@ -103,7 +103,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Build transcript + exact stats + LLM prompt for the CURRENT group.\nconst MAX_CHARS = 40000; // guardrail for very high-volume days\nconst rows = $input.all().map(i => i.json)\n  .filter(r => r && String(r.message ?? '').trim().length > 0);\nconst g = $('Loop Over Groups').first().json;\n\nconst total = rows.length;\nconst members = [...new Set(rows.map(r => r.sender_name).filter(Boolean))];\n\nconst pad = n => String(n).padStart(2, '0');\nconst months = ['Januari','Februari','Maret','April','Mei','Juni','Juli',\n                'Agustus','September','Oktober','November','Desember'];\nconst jak = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));\nconst dateStr = pad(jak.getDate()) + ' ' + months[jak.getMonth()] + ' ' + jak.getFullYear();\n\nlet transcript = rows.map(r => {\n  const t = new Date(r.timestamp).toLocaleTimeString('id-ID',\n    { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });\n  return '[' + t + '] ' + (r.sender_name || 'Unknown') + ': ' + r.message;\n}).join('\\n');\n\nlet truncated = false;\nif (transcript.length > MAX_CHARS) { transcript = transcript.slice(-MAX_CHARS); truncated = true; }\n\nconst prompt =\n`Kamu adalah asisten yang merangkum percakapan grup WhatsApp dalam Bahasa Indonesia.\nBerdasarkan transkrip, hasilkan dua daftar: \"topics\" (topik yang dibahas) dan\n\"action_items\" (keputusan/tugas/hal yang harus ditindaklanjuti, sebutkan penanggung\njawab bila ada). Setiap item satu kalimat ringkas. Gabungkan pesan sejenis menjadi satu\ntopik. Jangan mengarang hal yang tidak ada di transkrip.\n${truncated ? '(Catatan: sebagian pesan paling awal dipotong karena volume besar.)\\n' : ''}\nTranskrip:\n${transcript}`;\n\nreturn [{ json: {\n  chat_jid: g.chat_jid, project_name: g.project_name, send_to: g.send_to,\n  total, memberCount: members.length, memberList: members.join(', '), dateStr, prompt,\n} }];"
+        "jsCode": "// Build transcript + exact stats + LLM prompt for the CURRENT group.\nconst MAX_CHARS = 40000; // guardrail for very high-volume days\nconst rows = $input.all().map(i => i.json)\n  .filter(r => r && String(r.message ?? '').trim().length > 0);\nconst g = $('Loop Over Groups').first().json;\n\nconst total = rows.length;\nconst members = [...new Set(rows.map(r => r.sender_name).filter(Boolean))];\n\nconst pad = n => String(n).padStart(2, '0');\nconst months = ['Januari','Februari','Maret','April','Mei','Juni','Juli',\n                'Agustus','September','Oktober','November','Desember'];\nconst jak = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));\njak.setDate(jak.getDate() - 1); // summary covers the previous day\nconst dateStr = pad(jak.getDate()) + ' ' + months[jak.getMonth()] + ' ' + jak.getFullYear();\n\nlet transcript = rows.map(r => {\n  const t = new Date(r.timestamp).toLocaleTimeString('id-ID',\n    { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });\n  return '[' + t + '] ' + (r.sender_name || 'Unknown') + ': ' + r.message;\n}).join('\\n');\n\nlet truncated = false;\nif (transcript.length > MAX_CHARS) { transcript = transcript.slice(-MAX_CHARS); truncated = true; }\n\nconst prompt =\n`Kamu adalah asisten yang merangkum percakapan grup WhatsApp dalam Bahasa Indonesia.\nBerdasarkan transkrip, hasilkan dua daftar: \"topics\" (topik yang dibahas) dan\n\"action_items\" (keputusan/tugas/hal yang harus ditindaklanjuti, sebutkan penanggung\njawab bila ada). Setiap item satu kalimat ringkas. Gabungkan pesan sejenis menjadi satu\ntopik. Jangan mengarang hal yang tidak ada di transkrip.\n${truncated ? '(Catatan: sebagian pesan paling awal dipotong karena volume besar.)\\n' : ''}\nTranskrip:\n${transcript}`;\n\nreturn [{ json: {\n  chat_jid: g.chat_jid, project_name: g.project_name, send_to: g.send_to,\n  total, memberCount: members.length, memberList: members.join(', '), dateStr, prompt,\n} }];"
       },
       "id": "su-build",
       "name": "Build Transcript",
@@ -263,7 +263,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO wag_summaries (chat_jid, summary_date, message_count, member_count, status, summary_text)\nVALUES ($1, (now() AT TIME ZONE 'Asia/Jakarta')::date, $2, $3, $4, $5)\nON CONFLICT (chat_jid, summary_date) DO UPDATE SET\n  message_count = EXCLUDED.message_count,\n  member_count  = EXCLUDED.member_count,\n  status        = EXCLUDED.status,\n  summary_text  = EXCLUDED.summary_text,\n  created_at    = now()",
+        "query": "INSERT INTO wag_summaries (chat_jid, summary_date, message_count, member_count, status, summary_text)\nVALUES ($1, ((now() AT TIME ZONE 'Asia/Jakarta') - interval '1 day')::date, $2, $3, $4, $5)\nON CONFLICT (chat_jid, summary_date) DO UPDATE SET\n  message_count = EXCLUDED.message_count,\n  member_count  = EXCLUDED.member_count,\n  status        = EXCLUDED.status,\n  summary_text  = EXCLUDED.summary_text,\n  created_at    = now()",
         "options": {
           "queryReplacement": "={{ [ $('Render Summary').first().json.chat_jid, $('Render Summary').first().json.total, $('Render Summary').first().json.memberCount, $('Render Summary').first().json.status, $('Render Summary').first().json.message ] }}"
         }
@@ -302,7 +302,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO wag_summaries (chat_jid, summary_date, message_count, member_count, status, summary_text)\nVALUES ($1, (now() AT TIME ZONE 'Asia/Jakarta')::date, $2, $3, $4, $5)\nON CONFLICT (chat_jid, summary_date) DO UPDATE SET\n  message_count = EXCLUDED.message_count,\n  member_count  = EXCLUDED.member_count,\n  status        = EXCLUDED.status,\n  summary_text  = EXCLUDED.summary_text,\n  created_at    = now()",
+        "query": "INSERT INTO wag_summaries (chat_jid, summary_date, message_count, member_count, status, summary_text)\nVALUES ($1, ((now() AT TIME ZONE 'Asia/Jakarta') - interval '1 day')::date, $2, $3, $4, $5)\nON CONFLICT (chat_jid, summary_date) DO UPDATE SET\n  message_count = EXCLUDED.message_count,\n  member_count  = EXCLUDED.member_count,\n  status        = EXCLUDED.status,\n  summary_text  = EXCLUDED.summary_text,\n  created_at    = now()",
         "options": {
           "queryReplacement": "={{ [ $('No Activity Message').first().json.chat_jid, $('No Activity Message').first().json.total, $('No Activity Message').first().json.memberCount, $('No Activity Message').first().json.status, $('No Activity Message').first().json.message ] }}"
         }
@@ -336,7 +336,7 @@
     }
   ],
   "connections": {
-    "Every day 23:00": {
+    "Every day 07:00": {
       "main": [
         [
           {
