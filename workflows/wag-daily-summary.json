@@ -244,6 +244,7 @@
         1780,
         120
       ],
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": {
           "id": "REPLACE_WITH_POSTGRES_CRED_ID",

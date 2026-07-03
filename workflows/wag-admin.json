@@ -251,6 +251,7 @@
         280,
         -300
       ],
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": {
           "id": "REPLACE_WITH_POSTGRES_CRED_ID",
@@ -333,6 +334,7 @@
         280,
         0
       ],
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": {
           "id": "REPLACE_WITH_POSTGRES_CRED_ID",
@@ -415,6 +417,7 @@
         720,
         500
       ],
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": {
           "id": "REPLACE_WITH_POSTGRES_CRED_ID",
@@ -424,7 +427,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const n = $input.all().length;\nconst resultMessage = '✅ ' + n + ' grup didaftarkan (semua ringkasan dikirim ke nomor yang sama). ' +\n  'Sesuaikan penerima per grup lewat aksi \"Save group (add or update)\", atau nonaktifkan yang tak perlu.';\nreturn [{ json: { resultMessage } }];"
+        "jsCode": "const n = $('Map Groups to Rows').all().length;\nconst resultMessage = '✅ ' + n + ' grup didaftarkan (semua ringkasan dikirim ke nomor yang sama). ' +\n  'Sesuaikan penerima per grup lewat aksi \"Save group (add or update)\", atau nonaktifkan yang tak perlu.';\nreturn [{ json: { resultMessage } }];"
       },
       "id": "ad-bulk-msg",
       "name": "Bulk Result",
@@ -486,6 +489,7 @@
         280,
         300
       ],
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": {
           "id": "REPLACE_WITH_POSTGRES_CRED_ID",
