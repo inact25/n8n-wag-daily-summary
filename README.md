@@ -200,11 +200,20 @@ carry placeholder credential IDs you must replace):
 
 ### 4. Set configuration values
 
-| What | Where |
-|------|-------|
-| **go-wa base URL** | `Send via go-wa`, `Send Alert via go-wa`, and admin `go-wa: List Groups` — the URL field, default `http://localhost:3000`. |
-| **Admin alert number** | `Build Alert` node in `wag-error-alert.json` — default `6285609200000`. |
-| **Schedule / timezone / model / message format** | See [Customization](#customization). |
+The go-wa URL and the alert recipient are read from **n8n environment variables**, so you set them
+once on the instance instead of editing nodes:
+
+| Env var | Purpose | Fallback |
+|---------|---------|----------|
+| `GOWA_BASE_URL` | go-wa base URL used by all send/list nodes (e.g. `https://wa.example.com`). | `http://localhost:3000` |
+| `WAG_ALERT_TO` | Number that receives failure alerts (digits, no `+`). | built-in default |
+
+Set them where your n8n runs — e.g. Docker `-e GOWA_BASE_URL=... -e WAG_ALERT_TO=...`, or in n8n's
+`.env`. (In the Admin wizard you can also type a **go-wa base URL** directly in the form, which
+takes precedence for the setup actions.)
+
+Other settings — schedule, timezone, model, message format — are covered under
+[Customization](#customization).
 
 ### 5. Run the setup wizard
 
@@ -294,9 +303,9 @@ name, failing node, and error message; **Send Alert via go-wa** sends it to the 
 | LLM model | `gemini-2.5-flash` | `Google Gemini Chat Model` node |
 | LLM temperature | `0.3` | `Google Gemini Chat Model` node options |
 | Transcript cap | `40000` chars | `MAX_CHARS` in `Build Transcript` code |
-| go-wa base URL | `http://localhost:3000` | `Send via go-wa` / `Send Alert via go-wa` URL |
-| Admin alert number | `6285609200000` | `Build Alert` code |
-| Groups & recipients | — | `wag_groups` table |
+| go-wa base URL | env `GOWA_BASE_URL` | all send/list node URLs (fallback `http://localhost:3000`) |
+| Admin alert number | env `WAG_ALERT_TO` | `Build Alert` code (fallback built-in) |
+| Groups & recipients | — | `wag_groups` table (via the Admin wizard) |
 
 ---
 

@@ -284,7 +284,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
+        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || $env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
         "options": {}
@@ -366,7 +366,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
+        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || $env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
         "options": {}
