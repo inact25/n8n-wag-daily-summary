@@ -69,8 +69,10 @@ upsert as the SQL in the README — keep the two in sync if you change columns.
 ## Setup / configuration checklist
 
 1. Preferred: import `wag-admin.json`, run it, and use the form — *Install database schema*, then
-   *Show WhatsApp groups* / *Save group* to register. Equivalent to running `db/schema.sql` and
-   `INSERT`ing into `wag_groups` by hand (still supported for SQL-first setups).
+   *Register ALL WhatsApp groups (bulk)* (one submission registers every go-wa group to a single
+   recipient) or *Save group* for individual entries. The form's *go-wa base URL* field feeds the
+   go-wa actions. Equivalent to running `db/schema.sql` and `INSERT`ing into `wag_groups` by hand
+   (still supported for SQL-first setups).
 3. Create three n8n credentials and map them onto the placeholder-credential nodes:
    - **Postgres** — on `Upsert Message`, `Get Active Groups`, `Get Today's Messages`, `Log Summary`.
    - **Google Gemini (PaLM) API** (an API key from Google AI Studio) — on the

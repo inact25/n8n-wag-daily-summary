@@ -68,7 +68,8 @@ Statistik:
 ## Features
 
 - **No-SQL setup wizard** — an in-n8n Form installs the database tables and adds/lists/removes
-  groups (and can list your WhatsApp groups from go-wa). You only provide a Postgres connection.
+  groups, including **one-click bulk registration of all your WhatsApp groups** from go-wa. You only
+  provide a Postgres connection.
 - **Multi-group** — summarize any number of groups from one workflow; add/remove a group from the
   wizard (or a database row), no workflow changes.
 - **Real-time ingestion** — every incoming message is captured via webhook and stored.
@@ -214,12 +215,16 @@ URL from the `Admin Form` node). A web form appears with an **Action** dropdown:
 1. **Install database schema** — creates `wag_groups`, `wag_messages`, `wag_summaries` (idempotent;
    safe to re-run). Do this once first.
 2. **Show WhatsApp groups (from go-wa)** — lists your WhatsApp groups with their JIDs so you can
-   copy the right `…@g.us`.
-3. **Save group (add or update)** — fill **Chat JID**, **Project name**, **Send to number**, and
-   **Active** to register (or update) a group. Repeat for each group.
-4. **List registered groups** / **Remove group** — review or delete entries anytime.
+   copy the right `…@g.us`. Uses the **go-wa base URL** field (default `http://localhost:3000`).
+3. **Register ALL WhatsApp groups (bulk)** — one submission registers *every* WhatsApp group at
+   once, using each group's name as its project name and the single **Send to number** you enter as
+   the recipient for all. Best when you have many groups — no need to run the form per group.
+4. **Save group (add or update)** — fine-tune one group: fill **Chat JID**, **Project name**,
+   **Send to number**, **Active**. Use this to change a single group's recipient after a bulk import.
+5. **List registered groups** / **Remove group** — review or delete entries anytime.
 
-That's the entire database setup — no command line.
+That's the entire database setup — no command line. The **go-wa base URL** field on the form is
+used by the two go-wa actions, so you don't have to hardcode it for setup.
 
 ### 6. Point the go-wa webhook and activate
 
@@ -297,8 +302,9 @@ name, failing node, and error message; **Send Alert via go-wa** sends it to the 
 
 ## Managing groups
 
-The easiest way is the **Admin / Setup Wizard** (step 5) — *Save group*, *List registered groups*,
-*Remove group*. If you'd rather use SQL, change the registry table directly:
+The easiest way is the **Admin / Setup Wizard** (step 5): *Register ALL WhatsApp groups (bulk)* to
+onboard everything at once, then *Save group* / *List registered groups* / *Remove group* to adjust
+individual entries. If you'd rather use SQL, change the registry table directly:
 
 ```sql
 -- Add a group

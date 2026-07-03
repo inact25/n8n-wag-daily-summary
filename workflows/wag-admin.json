@@ -23,6 +23,9 @@
                     "option": "Save group (add or update)"
                   },
                   {
+                    "option": "Register ALL WhatsApp groups (bulk)"
+                  },
+                  {
                     "option": "List registered groups"
                   },
                   {
@@ -59,6 +62,11 @@
                   }
                 ]
               }
+            },
+            {
+              "fieldLabel": "go-wa base URL",
+              "fieldType": "text",
+              "placeholder": "http://localhost:3000"
             }
           ]
         },
@@ -146,6 +154,29 @@
               },
               "renameOutput": true,
               "outputKey": "save"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Action }}",
+                    "rightValue": "Register ALL WhatsApp groups (bulk)",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "bulk"
             },
             {
               "conditions": {
@@ -253,7 +284,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "http://localhost:3000/user/my/groups",
+        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
         "options": {}
@@ -330,6 +361,78 @@
       "position": [
         520,
         0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "ad-gowa2",
+      "name": "go-wa: List Groups (bulk)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        500
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_WITH_GOWA_BASIC_CRED_ID",
+          "name": "go-wa basic auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\nlet arr = (r.results && (r.results.data || r.results)) || r.data || r.groups || [];\nif (!Array.isArray(arr)) arr = [];\nconst sendTo = $('Admin Form').first().json['Send to number'];\nif (!sendTo) throw new Error('Isi kolom \"Send to number\" untuk bulk register (dipakai untuk semua grup).');\nconst rows = arr\n  .map(g => ({ chat_jid: g.JID || g.jid || g.id || '', project_name: g.name || g.subject || 'Group', send_to: sendTo }))\n  .filter(x => String(x.chat_jid).endsWith('@g.us'));\nif (!rows.length) throw new Error('go-wa tidak mengembalikan grup untuk didaftarkan.');\nreturn rows.map(x => ({ json: x }));"
+      },
+      "id": "ad-map",
+      "name": "Map Groups to Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO wag_groups (chat_jid, project_name, send_to, active)\nVALUES ($1,$2,$3,$4)\nON CONFLICT (chat_jid) DO UPDATE SET\n  project_name = EXCLUDED.project_name,\n  send_to = EXCLUDED.send_to,\n  active = EXCLUDED.active",
+        "options": {
+          "queryReplacement": "={{ [ $json.chat_jid, $json.project_name, $json.send_to, true ] }}"
+        }
+      },
+      "id": "ad-bulk",
+      "name": "Bulk Upsert Groups",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        720,
+        500
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const n = $input.all().length;\nconst resultMessage = '✅ ' + n + ' grup didaftarkan (semua ringkasan dikirim ke nomor yang sama). ' +\n  'Sesuaikan penerima per grup lewat aksi \"Save group (add or update)\", atau nonaktifkan yang tak perlu.';\nreturn [{ json: { resultMessage } }];"
+      },
+      "id": "ad-bulk-msg",
+      "name": "Bulk Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        500
       ]
     },
     {
@@ -467,6 +570,13 @@
         ],
         [
           {
+            "node": "go-wa: List Groups (bulk)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Select Groups",
             "type": "main",
             "index": 0
@@ -537,6 +647,50 @@
       ]
     },
     "Msg: Saved": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "go-wa: List Groups (bulk)": {
+      "main": [
+        [
+          {
+            "node": "Map Groups to Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Groups to Rows": {
+      "main": [
+        [
+          {
+            "node": "Bulk Upsert Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bulk Upsert Groups": {
+      "main": [
+        [
+          {
+            "node": "Bulk Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bulk Result": {
       "main": [
         [
           {
