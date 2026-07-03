@@ -72,7 +72,11 @@ generator) — keep all three in sync if you change columns.
   message layout, edit `Render Summary`/`No Activity Message`, not the prompt.
 - **Per-group loop with `onError: continueRegularOutput`** on `Summarize (LLM Chain)` and
   `Send via go-wa` — one group failing doesn't abort the rest; the failure is still logged.
-- **Empty groups are logged, not messaged.** The IF false-branch goes `No Activity Message → Log
+- **The daily loop only covers groups with activity today.** `Get Active Groups` filters
+  `wag_groups` with an `EXISTS` against `wag_messages` for the Asia/Jakarta day, so a large registry
+  (go-wa `/user/my/groups` often returns *all* member groups incl. communities — hundreds) doesn't
+  bloat the run; only groups that actually got messages are processed/messaged.
+- **Empty groups are logged, not messaged** (safety net if a looped group's messages all filter out). The IF false-branch goes `No Activity Message → Log
   Empty → loop` (status `empty`) with **no send**, so registering many quiet groups doesn't spam the
   recipient. Only groups with activity go through `Render Summary → Send via go-wa → Log Summary`.
   Each branch has its own log node reading its own branch's data node (avoids the `$json`-replaced

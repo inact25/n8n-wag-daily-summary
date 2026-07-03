@@ -47,7 +47,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT chat_jid, project_name, send_to\nFROM wag_groups\nWHERE active = true\nORDER BY chat_jid",
+        "query": "SELECT g.chat_jid, g.project_name, g.send_to\nFROM wag_groups g\nWHERE g.active = true\n  AND EXISTS (\n    SELECT 1 FROM wag_messages m\n    WHERE m.chat_jid = g.chat_jid\n      AND (m.\"timestamp\" AT TIME ZONE 'Asia/Jakarta') >= date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta')\n      AND (m.\"timestamp\" AT TIME ZONE 'Asia/Jakarta') <  date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta') + interval '1 day'\n  )\nORDER BY g.project_name",
         "options": {}
       },
       "id": "su-groups",
