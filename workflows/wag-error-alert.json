@@ -15,7 +15,30 @@
     },
     {
       "parameters": {
-        "jsCode": "// Admin recipient: set env var WAG_ALERT_TO on n8n; falls back to the constant below.\nconst to = (typeof $env !== 'undefined' && $env.WAG_ALERT_TO) || '6285609200000';\nconst e = $json;\nconst ex = e.execution || {};\nconst wf = e.workflow || {};\nconst err = ex.error || {};\nconst t = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });\nconst message =\n  '⚠️ n8n Workflow Error\\n' +\n  'Workflow: ' + (wf.name || '-') + '\\n' +\n  'Node: ' + (ex.lastNodeExecuted || '-') + '\\n' +\n  'Error: ' + (err.message || '-') + '\\n' +\n  'Mode: ' + (ex.mode || '-') + '\\n' +\n  'Waktu: ' + t + (ex.url ? '\\nExecution: ' + ex.url : '');\nreturn [{ json: { phone: to, message } }];"
+        "operation": "executeQuery",
+        "query": "SELECT\n  max(NULLIF(value, '')) FILTER (WHERE key = 'gowa_base_url')  AS gowa_base_url,\n  max(NULLIF(value, '')) FILTER (WHERE key = 'gowa_device_id') AS gowa_device_id,\n  max(NULLIF(value, '')) FILTER (WHERE key = 'alert_to')       AS alert_to\nFROM wag_config",
+        "options": {}
+      },
+      "id": "er-config",
+      "name": "Get Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        200,
+        -160
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recipient: from wag_config (Get Config), then env WAG_ALERT_TO, then the constant.\nconst cfg = $('Get Config').first().json;\nconst to = cfg.alert_to || (typeof $env !== 'undefined' && $env.WAG_ALERT_TO) || '6285609200000';\nconst e = $json;\nconst ex = e.execution || {};\nconst wf = e.workflow || {};\nconst err = ex.error || {};\nconst t = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });\nconst message =\n  '⚠️ n8n Workflow Error\\n' +\n  'Workflow: ' + (wf.name || '-') + '\\n' +\n  'Node: ' + (ex.lastNodeExecuted || '-') + '\\n' +\n  'Error: ' + (err.message || '-') + '\\n' +\n  'Mode: ' + (ex.mode || '-') + '\\n' +\n  'Waktu: ' + t + (ex.url ? '\\nExecution: ' + ex.url : '');\nreturn [{ json: { phone: to, message } }];"
       },
       "id": "er-build",
       "name": "Build Alert",
@@ -29,7 +52,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ ($env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/send/message",
+        "url": "={{ ($('Get Config').first().json.gowa_base_url || $env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/send/message",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
         "sendHeaders": true,
@@ -37,7 +60,7 @@
           "parameters": [
             {
               "name": "X-Device-Id",
-              "value": "={{ $env.GOWA_DEVICE_ID || '' }}"
+              "value": "={{ ($('Get Config').first().json.gowa_device_id || $env.GOWA_DEVICE_ID || '') }}"
             }
           ]
         },
@@ -64,6 +87,17 @@
   ],
   "connections": {
     "On Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Get Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Config": {
       "main": [
         [
           {

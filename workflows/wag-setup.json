@@ -41,7 +41,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "CREATE TABLE IF NOT EXISTS wag_groups (\n    chat_jid     TEXT PRIMARY KEY,\n    project_name TEXT        NOT NULL,\n    send_to      TEXT        NOT NULL,\n    active       BOOLEAN     NOT NULL DEFAULT TRUE,\n    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()\n);\nCREATE TABLE IF NOT EXISTS wag_messages (\n    id          BIGSERIAL PRIMARY KEY,\n    message_id  TEXT        UNIQUE,\n    chat_jid    TEXT        NOT NULL,\n    sender_jid  TEXT,\n    sender_name TEXT,\n    message     TEXT,\n    media_type  TEXT,\n    is_group    BOOLEAN     NOT NULL DEFAULT TRUE,\n    \"timestamp\" TIMESTAMPTZ NOT NULL DEFAULT now(),\n    raw         TEXT\n);\nCREATE INDEX IF NOT EXISTS idx_wag_messages_chat_time ON wag_messages (chat_jid, \"timestamp\");\nCREATE TABLE IF NOT EXISTS wag_summaries (\n    id            BIGSERIAL PRIMARY KEY,\n    chat_jid      TEXT        NOT NULL,\n    summary_date  DATE        NOT NULL,\n    message_count INT         NOT NULL DEFAULT 0,\n    member_count  INT         NOT NULL DEFAULT 0,\n    status        TEXT        NOT NULL,\n    summary_text  TEXT,\n    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),\n    UNIQUE (chat_jid, summary_date)\n);",
+        "query": "CREATE TABLE IF NOT EXISTS wag_groups (\n    chat_jid     TEXT PRIMARY KEY,\n    project_name TEXT        NOT NULL,\n    send_to      TEXT        NOT NULL,\n    active       BOOLEAN     NOT NULL DEFAULT TRUE,\n    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()\n);\nCREATE TABLE IF NOT EXISTS wag_messages (\n    id          BIGSERIAL PRIMARY KEY,\n    message_id  TEXT        UNIQUE,\n    chat_jid    TEXT        NOT NULL,\n    sender_jid  TEXT,\n    sender_name TEXT,\n    message     TEXT,\n    media_type  TEXT,\n    is_group    BOOLEAN     NOT NULL DEFAULT TRUE,\n    \"timestamp\" TIMESTAMPTZ NOT NULL DEFAULT now(),\n    raw         TEXT\n);\nCREATE INDEX IF NOT EXISTS idx_wag_messages_chat_time ON wag_messages (chat_jid, \"timestamp\");\nCREATE TABLE IF NOT EXISTS wag_summaries (\n    id            BIGSERIAL PRIMARY KEY,\n    chat_jid      TEXT        NOT NULL,\n    summary_date  DATE        NOT NULL,\n    message_count INT         NOT NULL DEFAULT 0,\n    member_count  INT         NOT NULL DEFAULT 0,\n    status        TEXT        NOT NULL,\n    summary_text  TEXT,\n    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),\n    UNIQUE (chat_jid, summary_date)\n);\nCREATE TABLE IF NOT EXISTS wag_config (\n    key   TEXT PRIMARY KEY,\n    value TEXT\n);",
         "options": {}
       },
       "id": "qs-ddl",
@@ -51,6 +51,30 @@
       "position": [
         0,
         0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO wag_config (key, value) VALUES ('gowa_base_url', $1), ('gowa_device_id', $2), ('alert_to', $3)\nON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+        "options": {
+          "queryReplacement": "={{ [ ($('Quick Setup Form').item.json['go-wa URL (optional)'] || ''), ($('Quick Setup Form').item.json['go-wa device id'] || ''), ($('Quick Setup Form').item.json['Summary recipient number'] || '') ] }}"
+        }
+      },
+      "id": "qs-saveconfig",
+      "name": "Save Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        180,
+        -160
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -172,6 +196,17 @@
       ]
     },
     "Create Tables": {
+      "main": [
+        [
+          {
+            "node": "Save Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Config": {
       "main": [
         [
           {

@@ -249,23 +249,24 @@ carry placeholder credential IDs you must replace):
 | **Google Gemini (PaLM) API** | `Google Gemini Chat Model` | Paste your Google AI Studio API key. |
 | **HTTP Basic Auth** | `Send via go-wa`, `Send Alert via go-wa`, `go-wa: List Groups` | Your go-wa username/password. |
 
-### 4. Set configuration values
+### 4. Configure go-wa settings
 
-The go-wa URL and the alert recipient are read from **n8n environment variables**, so you set them
-once on the instance instead of editing nodes:
+The go-wa base URL, device id, and alert recipient are stored **in the database** (a `wag_config`
+table) and read by the workflows at run time — **no environment variables and no node edits
+required** (handy on self-hosted n8n where `$env` access may be disabled). **Quick Setup (step 5)
+writes these for you** from its form fields, so most people can skip straight to step 5.
 
-| Env var | Purpose | Fallback |
-|---------|---------|----------|
-| `GOWA_BASE_URL` | go-wa base URL used by all send/list nodes (e.g. `https://wa.example.com`). | `http://localhost:3000` |
-| `GOWA_DEVICE_ID` | **Multi-device go-wa** requires a device id on every request (sent as the `X-Device-Id` header). | empty |
-| `WAG_ALERT_TO` | Number that receives failure alerts (digits, no `+`). | built-in default |
+Each value resolves in this order: **`wag_config` (DB) → env var → built-in default.** So env vars
+are an optional alternative/fallback:
 
-Set them where your n8n runs — e.g. Docker `-e GOWA_BASE_URL=... -e GOWA_DEVICE_ID=... -e WAG_ALERT_TO=...`,
-or in n8n's `.env`. (In the wizards you can also type the **go-wa base URL** and **go-wa device id**
-directly in the form, which take precedence for the setup actions.)
+| Setting | `wag_config` key | Env fallback | Default |
+|---------|------------------|--------------|---------|
+| go-wa base URL | `gowa_base_url` | `GOWA_BASE_URL` | `http://localhost:3000` |
+| go-wa device id (multi-device; sent as `X-Device-Id`) | `gowa_device_id` | `GOWA_DEVICE_ID` | empty |
+| alert recipient (digits, no `+`) | `alert_to` | `WAG_ALERT_TO` | built-in |
 
 > **Finding your device id:** after go-wa is logged in, call
-> `GET {GOWA_BASE_URL}/app/devices` (with the go-wa Basic Auth). The id is
+> `GET {base}/app/devices` (with the go-wa Basic Auth). The id is
 > `results.devices[].device_id` (e.g. `org_2`). If go-wa returns `DEVICE_ID_REQUIRED`, this is
 > what's missing.
 
@@ -371,9 +372,9 @@ name, failing node, and error message; **Send Alert via go-wa** sends it to the 
 | LLM model | `gemini-2.5-flash` | `Google Gemini Chat Model` node |
 | LLM temperature | `0.3` | `Google Gemini Chat Model` node options |
 | Transcript cap | `40000` chars | `MAX_CHARS` in `Build Transcript` code |
-| go-wa base URL | env `GOWA_BASE_URL` | all send/list node URLs (fallback `http://localhost:3000`) |
-| Admin alert number | env `WAG_ALERT_TO` | `Build Alert` code (fallback built-in) |
-| Groups & recipients | — | `wag_groups` table (via the Admin wizard) |
+| go-wa base URL / device id | `wag_config` table (`gowa_base_url`, `gowa_device_id`) → env → default | written by Quick Setup; read by `Get Config` |
+| Alert recipient | `wag_config` (`alert_to`) → `WAG_ALERT_TO` → built-in | `Build Alert` code |
+| Groups & recipients | — | `wag_groups` table (via Quick Setup / Admin wizard) |
 
 ---
 

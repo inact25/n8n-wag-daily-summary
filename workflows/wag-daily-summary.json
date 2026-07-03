@@ -18,9 +18,31 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -200,
+        -380,
         0
       ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  max(NULLIF(value, '')) FILTER (WHERE key = 'gowa_base_url')  AS gowa_base_url,\n  max(NULLIF(value, '')) FILTER (WHERE key = 'gowa_device_id') AS gowa_device_id,\n  max(NULLIF(value, '')) FILTER (WHERE key = 'alert_to')       AS alert_to\nFROM wag_config",
+        "options": {}
+      },
+      "id": "su-config",
+      "name": "Get Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -180,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
@@ -205,7 +227,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ ($env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/send/message",
+        "url": "={{ ($('Get Config').first().json.gowa_base_url || $env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/send/message",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
         "sendHeaders": true,
@@ -213,7 +235,7 @@
           "parameters": [
             {
               "name": "X-Device-Id",
-              "value": "={{ $env.GOWA_DEVICE_ID || '' }}"
+              "value": "={{ ($('Get Config').first().json.gowa_device_id || $env.GOWA_DEVICE_ID || '') }}"
             }
           ]
         },
@@ -276,6 +298,17 @@
   ],
   "connections": {
     "Every day 23:00": {
+      "main": [
+        [
+          {
+            "node": "Get Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Config": {
       "main": [
         [
           {

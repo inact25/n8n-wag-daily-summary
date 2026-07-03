@@ -48,6 +48,16 @@ CREATE TABLE IF NOT EXISTS wag_summaries (
 );
 
 -- ---------------------------------------------------------------------------
+-- Key/value config so the workflows need no environment variables.
+-- Quick Setup writes gowa_base_url / gowa_device_id / alert_to here; the
+-- summary and error workflows read them via their "Get Config" node.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS wag_config (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
+
+-- ---------------------------------------------------------------------------
 -- Seed example — edit and run to register your groups.
 -- ---------------------------------------------------------------------------
 -- INSERT INTO wag_groups (chat_jid, project_name, send_to) VALUES

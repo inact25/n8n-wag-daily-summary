@@ -55,6 +55,11 @@ generator) — keep all three in sync if you change columns.
   `INSERT ... ON CONFLICT DO NOTHING`, so webhook retries dedupe.
 - **`wag_summaries`** — one row per `(chat_jid, summary_date)` (unique). Daily run upserts status
   `success` / `empty` / `error` + the sent text. This is the audit trail and idempotency key.
+- **`wag_config`** — key/value store for `gowa_base_url`, `gowa_device_id`, `alert_to`. Quick Setup
+  writes it (`Save Config`); the summary and error workflows read it via a `Get Config` node so they
+  need **no environment variables**. Every go-wa URL/header/recipient resolves
+  **`wag_config` → `$env.*` → literal default** (`getConfigQuery` uses `NULLIF` so blank DB values
+  fall through). This exists because self-hosted n8n may disable `$env` access.
 
 ### Design decisions worth preserving
 - **Stats come from the DB, never the LLM.** `Build Transcript` computes `total` and distinct
@@ -86,11 +91,11 @@ generator) — keep all three in sync if you change columns.
      `Google Gemini Chat Model` sub-node.
    - **HTTP Basic Auth** for go-wa — on `Send via go-wa`, `Send Alert via go-wa`, and the admin
      `go-wa: List Groups` nodes.
-3. Set env vars on the n8n instance: **`GOWA_BASE_URL`** (go-wa base URL, used by every send/list
-   node with a `http://localhost:3000` fallback), **`GOWA_DEVICE_ID`** (multi-device go-wa requires
-   it; sent as the `X-Device-Id` header on all go-wa calls — find it via `GET {base}/app/devices`),
-   and **`WAG_ALERT_TO`** (failure-alert recipient). Not hardcoded — URLs/headers are
-   `={{ $env.* }}` expressions, overridable by the wizard form fields.
+3. Configure go-wa settings — **preferably just run Quick Setup**, which writes `gowa_base_url`,
+   `gowa_device_id`, and `alert_to` into `wag_config`. The summary/error workflows read them via
+   `Get Config`, so no env vars are needed. Env vars (`GOWA_BASE_URL`, `GOWA_DEVICE_ID`,
+   `WAG_ALERT_TO`) still work as a fallback. Device id (multi-device go-wa) is sent as the
+   `X-Device-Id` header — find it via `GET {base}/app/devices` → `results.devices[].device_id`.
 4. Point go-wa's webhook at `https://<n8n-host>/webhook/wag-incoming`; activate the ingest and
    summary workflows.
 5. **Error alerts:** import `wag-error-alert.json` (an Error Trigger → go-wa message; recipient via
