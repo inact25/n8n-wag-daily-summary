@@ -235,6 +235,9 @@ n8n import:workflow --input=workflows/wag-daily-summary.json
 n8n import:workflow --input=workflows/wag-error-alert.json
 ```
 
+Each workflow has a stable ID, so re-importing later **updates it in place** instead of creating a
+duplicate. (Verified against n8n 2.28.5.)
+
 ### 3. Create credentials
 
 Create these three credentials in n8n and assign them to the nodes that use them (imported nodes

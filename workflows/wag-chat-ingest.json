@@ -1,4 +1,5 @@
 {
+  "id": "wagIngest0000001",
   "name": "WAG Chat — Ingest (webhook → Postgres)",
   "nodes": [
     {
