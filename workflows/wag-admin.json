@@ -3,8 +3,8 @@
   "nodes": [
     {
       "parameters": {
-        "formTitle": "WAG Chat Admin",
-        "formDescription": "Setup & manage WhatsApp daily summaries — no SQL needed. Fill only the fields your action needs.",
+        "formTitle": "WAG Chat — Manage Groups (Advanced)",
+        "formDescription": "Advanced tools. Most people should use the \"Quick Setup\" workflow instead. Here you can install the database, list your WhatsApp groups to find a Chat JID (looks like 1203...@g.us), and add / update / remove a single group. Fill only the fields your chosen action needs.",
         "formFields": {
           "values": [
             {

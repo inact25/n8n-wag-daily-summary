@@ -27,7 +27,7 @@ build step. You import the workflows into your own n8n instance, add credentials
   - [2. Import the workflows](#2-import-the-workflows)
   - [3. Create credentials](#3-create-credentials)
   - [4. Set configuration values](#4-set-configuration-values)
-  - [5. Run the setup wizard](#5-run-the-setup-wizard)
+  - [5. Run Quick Setup](#5-run-quick-setup-recommended)
   - [6. Point the go-wa webhook and activate](#6-point-the-go-wa-webhook-and-activate)
   - [7. Wire up error alerts](#7-wire-up-error-alerts)
   - [SQL alternative](#sql-alternative)
@@ -67,9 +67,9 @@ Statistik:
 
 ## Features
 
-- **No-SQL setup wizard** — an in-n8n Form installs the database tables and adds/lists/removes
-  groups, including **one-click bulk registration of all your WhatsApp groups** from go-wa. You only
-  provide a Postgres connection.
+- **One-step Quick Setup** — an in-n8n Form where you enter a single thing (the number that
+  receives summaries); it creates the database and registers **all** your WhatsApp groups. No SQL,
+  no "Chat JID" to look up. A separate Advanced form covers per-group tweaks.
 - **Multi-group** — summarize any number of groups from one workflow; add/remove a group from the
   wizard (or a database row), no workflow changes.
 - **Real-time ingestion** — every incoming message is captured via webhook and stored.
@@ -138,7 +138,8 @@ return "all of today's messages" in a single call. They communicate through thre
 ```
 .
 ├── workflows/
-│   ├── wag-admin.json           # Form wizard: install schema + manage groups (no SQL)
+│   ├── wag-setup.json           # Quick Setup form: 1 field → install DB + register all groups
+│   ├── wag-admin.json           # Manage Groups (Advanced): per-group add/update/remove
 │   ├── wag-chat-ingest.json     # go-wa webhook → normalize → Postgres (dedupe)
 │   ├── wag-daily-summary.json   # schedule 23:00 → loop groups → Gemini → send → log
 │   └── wag-error-alert.json     # Error Trigger → WhatsApp alert to admin
@@ -164,10 +165,10 @@ return "all of today's messages" in a single call. They communicate through thre
 
 ## Setup
 
-Everything except the Postgres server itself is done **inside n8n** — including creating the
-database tables and registering groups, via the **Admin / Setup Wizard** (an n8n Form). You never
-need to run `psql`. (A raw `db/schema.sql` is included for anyone who prefers SQL — see
-[the SQL alternative](#sql-alternative).)
+Everything except the Postgres server itself is done **inside n8n**. The **Quick Setup** form
+creates the database tables and registers all your groups from one field — you never run `psql` or
+look up a Chat JID. (A raw `db/schema.sql` and a **Manage Groups (Advanced)** form are included for
+SQL-first setups and per-group control — see [the SQL alternative](#sql-alternative).)
 
 ### 1. go-wa (WhatsApp gateway)
 
@@ -181,6 +182,7 @@ In n8n: **Add workflow → ⋯ menu → Import from File**, and import all four 
 Or via the CLI on a self-hosted instance:
 
 ```bash
+n8n import:workflow --input=workflows/wag-setup.json
 n8n import:workflow --input=workflows/wag-admin.json
 n8n import:workflow --input=workflows/wag-chat-ingest.json
 n8n import:workflow --input=workflows/wag-daily-summary.json
@@ -215,25 +217,35 @@ takes precedence for the setup actions.)
 Other settings — schedule, timezone, model, message format — are covered under
 [Customization](#customization).
 
-### 5. Run the setup wizard
+### 5. Run Quick Setup (recommended)
 
-This creates the database tables and registers groups — no SQL. Open
-**WAG Chat — Admin / Setup Wizard** and click **Execute Workflow** (or open the form's test
-URL from the `Admin Form` node). A web form appears with an **Action** dropdown:
+This is the whole database setup — no SQL, no Chat JID. Open **WAG Chat — Quick Setup** and click
+**Execute Workflow** (or open the form's test URL from the `Quick Setup Form` node). A web form asks
+for one thing:
 
-1. **Install database schema** — creates `wag_groups`, `wag_messages`, `wag_summaries` (idempotent;
-   safe to re-run). Do this once first.
-2. **Show WhatsApp groups (from go-wa)** — lists your WhatsApp groups with their JIDs so you can
-   copy the right `…@g.us`. Uses the **go-wa base URL** field (default `http://localhost:3000`).
-3. **Register ALL WhatsApp groups (bulk)** — one submission registers *every* WhatsApp group at
-   once, using each group's name as its project name and the single **Send to number** you enter as
-   the recipient for all. Best when you have many groups — no need to run the form per group.
-4. **Save group (add or update)** — fine-tune one group: fill **Chat JID**, **Project name**,
-   **Send to number**, **Active**. Use this to change a single group's recipient after a bulk import.
-5. **List registered groups** / **Remove group** — review or delete entries anytime.
+- **Summary recipient number** — the WhatsApp number that should receive the daily summaries
+  (digits only, e.g. `628xxxxxxxxxx`).
+- *(optional)* **go-wa URL** — only if you didn't set the `GOWA_BASE_URL` env var.
 
-That's the entire database setup — no command line. The **go-wa base URL** field on the form is
-used by the two go-wa actions, so you don't have to hardcode it for setup.
+Submit, and it: creates the database tables (idempotent), fetches **all** your WhatsApp groups from
+go-wa, and registers every one of them to that number — summarized nightly at 23:00. Done.
+
+#### Advanced: manage individual groups
+
+Need different recipients per group, or to disable/remove one? Open **WAG Chat — Manage Groups
+(Advanced)**. Its form has an **Action** dropdown:
+
+| Action | What it does |
+|--------|--------------|
+| Install database schema | Creates the tables (same as Quick Setup; idempotent). |
+| Show WhatsApp groups (from go-wa) | Lists your groups **with their Chat JIDs** (`…@g.us`) so you can copy one. |
+| Register ALL WhatsApp groups (bulk) | Same bulk registration as Quick Setup. |
+| Save group (add or update) | Add/edit one group — needs **Chat JID**, **Project name**, **Send to number**, **Active**. |
+| List registered groups | Shows what's currently registered. |
+| Remove group | Deletes one group by **Chat JID**. |
+
+A **Chat JID** is a group's WhatsApp address, like `1203XXXXXXXXXXXXXX@g.us` — use *Show WhatsApp
+groups* to find it; you never type it by hand for Quick Setup.
 
 ### 6. Point the go-wa webhook and activate
 
@@ -311,9 +323,9 @@ name, failing node, and error message; **Send Alert via go-wa** sends it to the 
 
 ## Managing groups
 
-The easiest way is the **Admin / Setup Wizard** (step 5): *Register ALL WhatsApp groups (bulk)* to
-onboard everything at once, then *Save group* / *List registered groups* / *Remove group* to adjust
-individual entries. If you'd rather use SQL, change the registry table directly:
+The easiest way is **Quick Setup** (registers all groups at once). To adjust individual entries,
+use **Manage Groups (Advanced)**: *Save group* / *List registered groups* / *Remove group*. If you'd
+rather use SQL, change the registry table directly:
 
 ```sql
 -- Add a group

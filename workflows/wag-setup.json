@@ -1,0 +1,219 @@
+{
+  "name": "WAG Chat — Quick Setup",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "WAG Daily Summary — Quick Setup",
+        "formDescription": "One step. Enter the WhatsApp number that should receive the daily summaries, then Submit. This creates the database and registers ALL your WhatsApp groups to be summarized every night at 23:00. You can fine-tune later with the \"Manage Groups (Advanced)\" workflow.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Summary recipient number",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "628xxxxxxxxxx (digits only, no +)"
+            },
+            {
+              "fieldLabel": "go-wa URL (optional)",
+              "fieldType": "text",
+              "placeholder": "leave blank if GOWA_BASE_URL is set on n8n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "qs-form",
+      "name": "Quick Setup Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -220,
+        0
+      ],
+      "webhookId": "wag-quick-setup-form"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS wag_groups (\n    chat_jid     TEXT PRIMARY KEY,\n    project_name TEXT        NOT NULL,\n    send_to      TEXT        NOT NULL,\n    active       BOOLEAN     NOT NULL DEFAULT TRUE,\n    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()\n);\nCREATE TABLE IF NOT EXISTS wag_messages (\n    id          BIGSERIAL PRIMARY KEY,\n    message_id  TEXT        UNIQUE,\n    chat_jid    TEXT        NOT NULL,\n    sender_jid  TEXT,\n    sender_name TEXT,\n    message     TEXT,\n    media_type  TEXT,\n    is_group    BOOLEAN     NOT NULL DEFAULT TRUE,\n    \"timestamp\" TIMESTAMPTZ NOT NULL DEFAULT now(),\n    raw         TEXT\n);\nCREATE INDEX IF NOT EXISTS idx_wag_messages_chat_time ON wag_messages (chat_jid, \"timestamp\");\nCREATE TABLE IF NOT EXISTS wag_summaries (\n    id            BIGSERIAL PRIMARY KEY,\n    chat_jid      TEXT        NOT NULL,\n    summary_date  DATE        NOT NULL,\n    message_count INT         NOT NULL DEFAULT 0,\n    member_count  INT         NOT NULL DEFAULT 0,\n    status        TEXT        NOT NULL,\n    summary_text  TEXT,\n    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),\n    UNIQUE (chat_jid, summary_date)\n);",
+        "options": {}
+      },
+      "id": "qs-ddl",
+      "name": "Create Tables",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ ($('Quick Setup Form').item.json['go-wa URL (optional)'] || $env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "qs-gowa",
+      "name": "go-wa: List Groups",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_WITH_GOWA_BASIC_CRED_ID",
+          "name": "go-wa basic auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\nlet arr = (r.results && (r.results.data || r.results)) || r.data || r.groups || [];\nif (!Array.isArray(arr)) arr = [];\nconst sendTo = ($('Quick Setup Form').first().json['Summary recipient number'] || '').trim();\nif (!sendTo) throw new Error('Masukkan nomor penerima ringkasan (contoh: 628xxxxxxxxxx).');\nconst rows = arr\n  .map(g => ({ chat_jid: g.JID || g.jid || g.id || '', project_name: g.name || g.subject || 'Group', send_to: sendTo }))\n  .filter(x => String(x.chat_jid).endsWith('@g.us'));\nif (!rows.length) throw new Error('Tidak ada grup dari go-wa. Pastikan go-wa aktif & kredensial benar.');\nreturn rows.map(x => ({ json: x }));"
+      },
+      "id": "qs-map",
+      "name": "Map Groups to Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO wag_groups (chat_jid, project_name, send_to, active)\nVALUES ($1,$2,$3,$4)\nON CONFLICT (chat_jid) DO UPDATE SET\n  project_name = EXCLUDED.project_name,\n  send_to = EXCLUDED.send_to,\n  active = EXCLUDED.active",
+        "options": {
+          "queryReplacement": "={{ [ $json.chat_jid, $json.project_name, $json.send_to, true ] }}"
+        }
+      },
+      "id": "qs-bulk",
+      "name": "Register Groups",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        660,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const n = $input.all().length;\nconst to = ($('Quick Setup Form').first().json['Summary recipient number'] || '').trim();\nconst resultMessage =\n  '✅ Setup selesai! ' + n + ' grup didaftarkan.\\n' +\n  'Ringkasan harian dikirim ke ' + to + ' setiap hari pukul 23:00 WIB.\\n\\n' +\n  'Pastikan workflow \"WAG Chat — Ingest\" dan \"WAG Chat — Daily Summary\" sudah Active.';\nreturn [{ json: { resultMessage } }];"
+      },
+      "id": "qs-msg",
+      "name": "Build Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "All set 🎉",
+        "completionMessage": "={{ $json.resultMessage }}",
+        "options": {}
+      },
+      "id": "qs-result",
+      "name": "Result",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Quick Setup Form": {
+      "main": [
+        [
+          {
+            "node": "Create Tables",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Tables": {
+      "main": [
+        [
+          {
+            "node": "go-wa: List Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "go-wa: List Groups": {
+      "main": [
+        [
+          {
+            "node": "Map Groups to Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Groups to Rows": {
+      "main": [
+        [
+          {
+            "node": "Register Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Groups": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Result": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta"
+  },
+  "pinData": {}
+}

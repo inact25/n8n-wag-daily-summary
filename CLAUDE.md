@@ -16,12 +16,19 @@ hand-editing JSON. The JSON here is generated/edited so the code-in-nodes stays 
 
 ## Architecture
 
-Three runtime workflows plus an admin wizard share three Postgres tables (`db/schema.sql`).
+Three runtime workflows plus two setup Forms share three Postgres tables (`db/schema.sql`).
 Ingestion (real-time) and summarization (daily batch) are decoupled because go-wa cannot return
-"all of today's messages" in one call. **`wag-admin.json`** is an n8n Form (`formTrigger` →
-`switch` → per-action Postgres/HTTP → shared `form` completion page) that installs the schema and
-does group CRUD, so users never touch `psql`. It runs the same DDL as `db/schema.sql` and the same
-upsert as the SQL in the README — keep the two in sync if you change columns.
+"all of today's messages" in one call.
+
+Setup is Form-based so users never touch `psql`:
+- **`wag-setup.json`** ("Quick Setup") — the beginner path. One linear flow: Form (single
+  *recipient number* field) → install DDL → fetch go-wa groups → register **all** of them → done.
+  No action dropdown, no Chat JID.
+- **`wag-admin.json`** ("Manage Groups (Advanced)") — `formTrigger` → `switch` (Install / Show
+  groups / Bulk / Save / List / Remove) → per-action Postgres/HTTP → shared `form` completion page.
+
+Both run the same DDL as `db/schema.sql` and the same `wag_groups` upsert (`upsertGroupQuery` in the
+generator) — keep all three in sync if you change columns.
 
 ```
  wag-chat-ingest.json                         wag-daily-summary.json
@@ -68,11 +75,10 @@ upsert as the SQL in the README — keep the two in sync if you change columns.
 
 ## Setup / configuration checklist
 
-1. Preferred: import `wag-admin.json`, run it, and use the form — *Install database schema*, then
-   *Register ALL WhatsApp groups (bulk)* (one submission registers every go-wa group to a single
-   recipient) or *Save group* for individual entries. The form's *go-wa base URL* field feeds the
-   go-wa actions. Equivalent to running `db/schema.sql` and `INSERT`ing into `wag_groups` by hand
-   (still supported for SQL-first setups).
+1. Preferred: import `wag-setup.json` ("Quick Setup"), run it, enter the recipient number, submit —
+   it installs the schema and registers every go-wa group. For per-group control use `wag-admin.json`
+   ("Manage Groups (Advanced)"). Both are equivalent to running `db/schema.sql` and `INSERT`ing into
+   `wag_groups` by hand (still supported for SQL-first setups).
 2. Create three n8n credentials and map them onto the placeholder-credential nodes:
    - **Postgres** — on the admin nodes plus `Upsert Message`, `Get Active Groups`,
      `Get Today's Messages`, `Log Summary`.
