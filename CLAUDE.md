@@ -26,6 +26,9 @@ Setup is Form-based so users never touch `psql`:
   No action dropdown, no Chat JID.
 - **`wag-admin.json`** ("Manage Groups (Advanced)") — `formTrigger` → `switch` (Install / Show
   groups / Bulk / Save / List / Remove) → per-action Postgres/HTTP → shared `form` completion page.
+- **`wag-reset.json`** ("Reset / Cleanup") — `formTrigger` → IF (`Confirm == 'RESET'`) → `switch`
+  (groups / messages / summaries / config / full) → `DELETE FROM …` → completion page. Deletes rows,
+  keeps tables. Same setMsg/switchRule helpers as admin.
 
 Both run the same DDL as `db/schema.sql` and the same `wag_groups` upsert (`upsertGroupQuery` in the
 generator) — keep all three in sync if you change columns.

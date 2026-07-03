@@ -143,7 +143,8 @@ return "all of today's messages" in a single call. They communicate through thre
 │   ├── wag-admin.json           # Manage Groups (Advanced): per-group add/update/remove
 │   ├── wag-chat-ingest.json     # go-wa webhook → normalize → Postgres (dedupe)
 │   ├── wag-daily-summary.json   # schedule 23:00 → loop groups → Gemini → send → log
-│   └── wag-error-alert.json     # Error Trigger → WhatsApp alert to admin
+│   ├── wag-error-alert.json     # Error Trigger → WhatsApp alert to admin
+│   └── wag-reset.json           # Form: wipe groups/messages/summaries/config (typed confirm)
 ├── db/
 │   └── schema.sql               # wag_groups, wag_messages, wag_summaries (optional; wizard does this)
 ├── docker-compose.yml           # full stack: Postgres + go-wa + n8n, pre-wired
@@ -233,6 +234,7 @@ n8n import:workflow --input=workflows/wag-admin.json
 n8n import:workflow --input=workflows/wag-chat-ingest.json
 n8n import:workflow --input=workflows/wag-daily-summary.json
 n8n import:workflow --input=workflows/wag-error-alert.json
+n8n import:workflow --input=workflows/wag-reset.json
 ```
 
 Each workflow has a stable ID, so re-importing later **updates it in place** instead of creating a
@@ -401,6 +403,19 @@ UPDATE wag_groups SET send_to = '6281234567890' WHERE chat_jid = '1203...@g.us';
 -- Remove a group entirely
 DELETE FROM wag_groups WHERE chat_jid = '1203...@g.us';
 ```
+
+### Reset / cleanup (no SQL)
+
+`go-wa` returns **every** group your account belongs to (communities, old groups…), so "register all"
+can store far more than you actively use. To start clean, run **WAG Chat — Reset / Cleanup**: a form
+that (after you type `RESET` to confirm) can:
+
+- **Remove ALL registered groups** — clears `wag_groups`; then re-run Quick Setup for a fresh set.
+- **Clear captured messages** / **Clear summary history** / **Reset go-wa settings** — individually.
+- **FULL RESET** — wipe groups, messages, summaries, and config in one go.
+
+The tables themselves are kept; only rows are deleted. (The daily run already ignores registered
+groups that had no messages that day, so pruning is optional — but this keeps things tidy.)
 
 ---
 

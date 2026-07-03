@@ -1,0 +1,681 @@
+{
+  "id": "wagReset00000001",
+  "name": "WAG Chat — Reset / Cleanup",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "WAG Chat — Reset / Cleanup",
+        "formDescription": "⚠️ Destructive. Deletes data (the tables stay). Pick what to reset and type RESET to confirm. Tip: \"Remove ALL registered groups\" clears everything from Quick Setup so you can re-register a clean set.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "What to reset",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Remove ALL registered groups"
+                  },
+                  {
+                    "option": "Clear captured messages"
+                  },
+                  {
+                    "option": "Clear summary history"
+                  },
+                  {
+                    "option": "Reset go-wa settings (config)"
+                  },
+                  {
+                    "option": "FULL RESET — wipe everything (groups, messages, summaries, config)"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Confirm",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "type RESET (uppercase) to proceed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "rs-form",
+      "name": "Reset Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -320,
+        0
+      ],
+      "webhookId": "wag-reset-form"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c-confirm",
+              "leftValue": "={{ $json.Confirm }}",
+              "rightValue": "RESET",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "rs-guard",
+      "name": "Confirmed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Action }}",
+                    "rightValue": "Remove ALL registered groups",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "groups"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Action }}",
+                    "rightValue": "Clear captured messages",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "messages"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Action }}",
+                    "rightValue": "Clear summary history",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "summaries"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Action }}",
+                    "rightValue": "Reset go-wa settings (config)",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "config"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Action }}",
+                    "rightValue": "FULL RESET — wipe everything (groups, messages, summaries, config)",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "full"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "rs-switch",
+      "name": "Route Reset",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        120,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM wag_groups",
+        "options": {}
+      },
+      "id": "rs-del-groups",
+      "name": "Delete Groups",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        360,
+        -260
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM wag_messages",
+        "options": {}
+      },
+      "id": "rs-del-msgs",
+      "name": "Delete Messages",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        360,
+        -130
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM wag_summaries",
+        "options": {}
+      },
+      "id": "rs-del-sums",
+      "name": "Delete Summaries",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        360,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM wag_config",
+        "options": {}
+      },
+      "id": "rs-del-config",
+      "name": "Delete Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        360,
+        130
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM wag_summaries;\nDELETE FROM wag_messages;\nDELETE FROM wag_groups;\nDELETE FROM wag_config",
+        "options": {}
+      },
+      "id": "rs-del-full",
+      "name": "Delete Everything",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        360,
+        260
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "rs-msg-groups-a",
+              "name": "resultMessage",
+              "type": "string",
+              "value": "🗑️ All registered groups removed. Re-run Quick Setup to register a fresh set."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "rs-msg-groups",
+      "name": "Msg: Groups",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        600,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "rs-msg-msgs-a",
+              "name": "resultMessage",
+              "type": "string",
+              "value": "🗑️ Captured messages cleared (wag_messages)."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "rs-msg-msgs",
+      "name": "Msg: Messages",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        600,
+        -130
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "rs-msg-sums-a",
+              "name": "resultMessage",
+              "type": "string",
+              "value": "🗑️ Summary history cleared (wag_summaries)."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "rs-msg-sums",
+      "name": "Msg: Summaries",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "rs-msg-config-a",
+              "name": "resultMessage",
+              "type": "string",
+              "value": "🗑️ go-wa settings cleared (wag_config). Re-run Quick Setup to reconfigure."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "rs-msg-config",
+      "name": "Msg: Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        600,
+        130
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "rs-msg-full-a",
+              "name": "resultMessage",
+              "type": "string",
+              "value": "🗑️ FULL RESET done — groups, messages, summaries and config wiped. Run Quick Setup to start over."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "rs-msg-full",
+      "name": "Msg: Full",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        600,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "rs-cancel-a",
+              "name": "resultMessage",
+              "type": "string",
+              "value": "Reset dibatalkan. Ketik RESET (huruf besar) di kolom Confirm untuk melanjutkan."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "rs-cancel",
+      "name": "Cancelled",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Reset",
+        "completionMessage": "={{ $json.resultMessage }}",
+        "options": {}
+      },
+      "id": "rs-result",
+      "name": "Result",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        840,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Reset Form": {
+      "main": [
+        [
+          {
+            "node": "Confirmed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmed?": {
+      "main": [
+        [
+          {
+            "node": "Route Reset",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cancelled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Reset": {
+      "main": [
+        [
+          {
+            "node": "Delete Groups",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delete Messages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delete Summaries",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delete Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delete Everything",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Groups": {
+      "main": [
+        [
+          {
+            "node": "Msg: Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Messages": {
+      "main": [
+        [
+          {
+            "node": "Msg: Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Summaries": {
+      "main": [
+        [
+          {
+            "node": "Msg: Summaries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Config": {
+      "main": [
+        [
+          {
+            "node": "Msg: Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Everything": {
+      "main": [
+        [
+          {
+            "node": "Msg: Full",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg: Groups": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg: Messages": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg: Summaries": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg: Config": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg: Full": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancelled": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta"
+  },
+  "pinData": {}
+}
