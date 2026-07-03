@@ -68,6 +68,11 @@
               "fieldLabel": "go-wa base URL",
               "fieldType": "text",
               "placeholder": "http://localhost:3000"
+            },
+            {
+              "fieldLabel": "go-wa device id",
+              "fieldType": "text",
+              "placeholder": "leave blank if GOWA_DEVICE_ID env is set"
             }
           ]
         },
@@ -289,6 +294,15 @@
         "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || $env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Device-Id",
+              "value": "={{ ($('Admin Form').item.json['go-wa device id'] || $env.GOWA_DEVICE_ID || '') }}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "ad-gowa",
@@ -372,6 +386,15 @@
         "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || $env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Device-Id",
+              "value": "={{ ($('Admin Form').item.json['go-wa device id'] || $env.GOWA_DEVICE_ID || '') }}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "ad-gowa2",

@@ -208,6 +208,15 @@
         "url": "={{ ($env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/send/message",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Device-Id",
+              "value": "={{ $env.GOWA_DEVICE_ID || '' }}"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ phone: $json.phone, message: $json.message }) }}",

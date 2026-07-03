@@ -87,8 +87,10 @@ generator) — keep all three in sync if you change columns.
    - **HTTP Basic Auth** for go-wa — on `Send via go-wa`, `Send Alert via go-wa`, and the admin
      `go-wa: List Groups` nodes.
 3. Set env vars on the n8n instance: **`GOWA_BASE_URL`** (go-wa base URL, used by every send/list
-   node with a `http://localhost:3000` fallback) and **`WAG_ALERT_TO`** (failure-alert recipient).
-   These are not hardcoded in nodes — the URLs are `={{ $env.GOWA_BASE_URL || '...' }}` expressions.
+   node with a `http://localhost:3000` fallback), **`GOWA_DEVICE_ID`** (multi-device go-wa requires
+   it; sent as the `X-Device-Id` header on all go-wa calls — find it via `GET {base}/app/devices`),
+   and **`WAG_ALERT_TO`** (failure-alert recipient). Not hardcoded — URLs/headers are
+   `={{ $env.* }}` expressions, overridable by the wizard form fields.
 4. Point go-wa's webhook at `https://<n8n-host>/webhook/wag-incoming`; activate the ingest and
    summary workflows.
 5. **Error alerts:** import `wag-error-alert.json` (an Error Trigger → go-wa message; recipient via

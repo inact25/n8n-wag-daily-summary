@@ -257,11 +257,16 @@ once on the instance instead of editing nodes:
 | Env var | Purpose | Fallback |
 |---------|---------|----------|
 | `GOWA_BASE_URL` | go-wa base URL used by all send/list nodes (e.g. `https://wa.example.com`). | `http://localhost:3000` |
+| `GOWA_DEVICE_ID` | **Multi-device go-wa** requires a device id on every request (sent as the `X-Device-Id` header). | empty |
 | `WAG_ALERT_TO` | Number that receives failure alerts (digits, no `+`). | built-in default |
 
-Set them where your n8n runs — e.g. Docker `-e GOWA_BASE_URL=... -e WAG_ALERT_TO=...`, or in n8n's
-`.env`. (In the Admin wizard you can also type a **go-wa base URL** directly in the form, which
-takes precedence for the setup actions.)
+Set them where your n8n runs — e.g. Docker `-e GOWA_BASE_URL=... -e GOWA_DEVICE_ID=... -e WAG_ALERT_TO=...`,
+or in n8n's `.env`. (In the wizards you can also type the **go-wa base URL** and **go-wa device id**
+directly in the form, which take precedence for the setup actions.)
+
+> **Finding your device id:** after go-wa is logged in, call
+> `GET {GOWA_BASE_URL}/app/devices` (with the go-wa Basic Auth) — use the returned device value.
+> If go-wa returns `DEVICE_ID_REQUIRED`, this is what's missing.
 
 Other settings — schedule, timezone, model, message format — are covered under
 [Customization](#customization).
@@ -452,6 +457,7 @@ In n8n itself, use **Executions** to inspect individual runs of each workflow.
 | Message not delivered | Wrong go-wa base URL / basic-auth credential, `send_to` not in international digits (no `+`), or go-wa not logged in. |
 | Wizard form does nothing / "Save group" has no effect | Postgres credential not assigned on the admin nodes, or you skipped **Install database schema** first. Run that action once, then retry. |
 | "Show WhatsApp groups" returns nothing | go-wa basic-auth credential/URL wrong on `go-wa: List Groups`, or go-wa not logged in. |
+| go-wa returns `DEVICE_ID_REQUIRED` (400) | Multi-device go-wa needs a device id. Set `GOWA_DEVICE_ID` env (or fill the form's *go-wa device id*); find it via `GET {base}/app/devices`. |
 | Postgres node errors on import | n8n version differs from the exported node version (see below). Re-open and re-save the node. |
 
 **Version-sensitive spots** (glance at these after importing into a different n8n version):

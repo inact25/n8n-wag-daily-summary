@@ -48,6 +48,7 @@ services:
       N8N_SECURE_COOKIE: "false"
       # App config the workflows read:
       GOWA_BASE_URL: ${GOWA_BASE_URL}
+      GOWA_DEVICE_ID: ${GOWA_DEVICE_ID}
       WAG_ALERT_TO: ${WAG_ALERT_TO}
     volumes:
       - n8n_data:/home/node/.n8n
