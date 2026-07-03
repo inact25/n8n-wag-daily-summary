@@ -9,7 +9,7 @@
         "formFields": {
           "values": [
             {
-              "fieldLabel": "What to reset",
+              "fieldLabel": "Action",
               "fieldType": "dropdown",
               "requiredField": true,
               "fieldOptions": {
