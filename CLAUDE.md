@@ -72,8 +72,15 @@ generator) — keep all three in sync if you change columns.
   message layout, edit `Render Summary`/`No Activity Message`, not the prompt.
 - **Per-group loop with `onError: continueRegularOutput`** on `Summarize (LLM Chain)` and
   `Send via go-wa` — one group failing doesn't abort the rest; the failure is still logged.
-- **Empty days** are handled via `alwaysOutputData: true` on `Get Today's Messages` so the IF
-  false-branch can send/log a "no activity" note instead of the run silently ending.
+- **Empty groups are logged, not messaged.** The IF false-branch goes `No Activity Message → Log
+  Empty → loop` (status `empty`) with **no send**, so registering many quiet groups doesn't spam the
+  recipient. Only groups with activity go through `Render Summary → Send via go-wa → Log Summary`.
+  Each branch has its own log node reading its own branch's data node (avoids the `$json`-replaced
+  cross-branch problem). `alwaysOutputData: true` on `Get Today's Messages` keeps empty groups flowing.
+- **Per-send delay:** a `Delay Between Sends` Wait node (5s) sits on the success path before looping,
+  to avoid WhatsApp rate-limit/ban from rapid sends. Adjust its amount as needed.
+- **Header shows the group name** — `Render Summary` uses `project_name` from `wag_groups`, set at
+  registration from the go-wa group `subject` (fallbacks to `Grup <last4 of JID>`).
 - **Transcript cap** (`MAX_CHARS` in `Build Transcript`) guards a runaway high-volume day.
 - **Loop wiring:** `Loop Over Groups` (Split in Batches, size 1) output **0 = done**, **1 = loop**;
   the loop body ends at `Log Summary`, which connects back to the loop node.

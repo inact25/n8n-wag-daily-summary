@@ -118,7 +118,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r = $json;\nconst res = r.results || r;\nlet arr = res.groups || res.data || (Array.isArray(res) ? res : []);\nif (!Array.isArray(arr)) arr = [];\nconst sendTo = ($('Quick Setup Form').first().json['Summary recipient number'] || '').trim();\nif (!sendTo) throw new Error('Masukkan nomor penerima ringkasan (contoh: 628xxxxxxxxxx).');\nconst rows = arr\n  .map(g => ({ chat_jid: g.JID || g.jid || g.id || '', project_name: g.name || g.subject || 'Group', send_to: sendTo }))\n  .filter(x => String(x.chat_jid).endsWith('@g.us'));\nif (!rows.length) throw new Error('Tidak ada grup dari go-wa. Pastikan go-wa aktif & kredensial benar.');\nreturn rows.map(x => ({ json: x }));"
+        "jsCode": "const r = $json;\nconst res = r.results || r;\nlet arr = res.groups || res.data || (Array.isArray(res) ? res : []);\nif (!Array.isArray(arr)) arr = [];\nconst sendTo = ($('Quick Setup Form').first().json['Summary recipient number'] || '').trim();\nif (!sendTo) throw new Error('Masukkan nomor penerima ringkasan (contoh: 628xxxxxxxxxx).');\nconst rows = arr\n  .map(g => {\n    const jid = g.id || g.jid || g.JID || '';\n    const name = g.subject || g.name || g.Subject || g.Name || ('Grup ' + String(jid).split('@')[0].slice(-4));\n    return { chat_jid: jid, project_name: name, send_to: sendTo };\n  })\n  .filter(x => String(x.chat_jid).endsWith('@g.us'));\nif (!rows.length) throw new Error('Tidak ada grup dari go-wa. Pastikan go-wa aktif & kredensial benar.');\nreturn rows.map(x => ({ json: x }));"
       },
       "id": "qs-map",
       "name": "Map Groups to Rows",

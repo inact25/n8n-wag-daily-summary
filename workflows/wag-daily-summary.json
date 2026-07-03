@@ -225,17 +225,6 @@
       ]
     },
     {
-      "parameters": {},
-      "id": "su-payload",
-      "name": "Send Payload",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        1480,
-        120
-      ]
-    },
-    {
       "parameters": {
         "method": "POST",
         "url": "={{ ($('Get Config').first().json.gowa_base_url || $env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/send/message",
@@ -261,7 +250,7 @@
       "typeVersion": 4.2,
       "position": [
         1700,
-        120
+        20
       ],
       "onError": "continueRegularOutput",
       "credentials": {
@@ -276,7 +265,7 @@
         "operation": "executeQuery",
         "query": "INSERT INTO wag_summaries (chat_jid, summary_date, message_count, member_count, status, summary_text)\nVALUES ($1, (now() AT TIME ZONE 'Asia/Jakarta')::date, $2, $3, $4, $5)\nON CONFLICT (chat_jid, summary_date) DO UPDATE SET\n  message_count = EXCLUDED.message_count,\n  member_count  = EXCLUDED.member_count,\n  status        = EXCLUDED.status,\n  summary_text  = EXCLUDED.summary_text,\n  created_at    = now()",
         "options": {
-          "queryReplacement": "={{ [ $('Send Payload').first().json.chat_jid, $('Send Payload').first().json.total, $('Send Payload').first().json.memberCount, $('Send Payload').first().json.status, $('Send Payload').first().json.message ] }}"
+          "queryReplacement": "={{ [ $('Render Summary').first().json.chat_jid, $('Render Summary').first().json.total, $('Render Summary').first().json.memberCount, $('Render Summary').first().json.status, $('Render Summary').first().json.message ] }}"
         }
       },
       "id": "su-log",
@@ -284,8 +273,47 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1780,
-        120
+        1900,
+        20
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "su-wait",
+      "name": "Delay Between Sends",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2100,
+        20
+      ],
+      "webhookId": "wag-summary-wait"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO wag_summaries (chat_jid, summary_date, message_count, member_count, status, summary_text)\nVALUES ($1, (now() AT TIME ZONE 'Asia/Jakarta')::date, $2, $3, $4, $5)\nON CONFLICT (chat_jid, summary_date) DO UPDATE SET\n  message_count = EXCLUDED.message_count,\n  member_count  = EXCLUDED.member_count,\n  status        = EXCLUDED.status,\n  summary_text  = EXCLUDED.summary_text,\n  created_at    = now()",
+        "options": {
+          "queryReplacement": "={{ [ $('No Activity Message').first().json.chat_jid, $('No Activity Message').first().json.total, $('No Activity Message').first().json.memberCount, $('No Activity Message').first().json.status, $('No Activity Message').first().json.message ] }}"
+        }
+      },
+      "id": "su-logempty",
+      "name": "Log Empty",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1480,
+        240
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -436,28 +464,6 @@
       "main": [
         [
           {
-            "node": "Send Payload",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "No Activity Message": {
-      "main": [
-        [
-          {
-            "node": "Send Payload",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send Payload": {
-      "main": [
-        [
-          {
             "node": "Send via go-wa",
             "type": "main",
             "index": 0
@@ -477,6 +483,39 @@
       ]
     },
     "Log Summary": {
+      "main": [
+        [
+          {
+            "node": "Delay Between Sends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delay Between Sends": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Activity Message": {
+      "main": [
+        [
+          {
+            "node": "Log Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Empty": {
       "main": [
         [
           {

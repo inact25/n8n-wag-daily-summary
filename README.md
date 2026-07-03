@@ -406,6 +406,13 @@ DELETE FROM wag_groups WHERE chat_jid = '1203...@g.us';
 
 ## Customization
 
+- **Delay between sends** — the `Delay Between Sends` (Wait) node pauses 5s between per-group
+  messages to avoid WhatsApp rate-limiting; change its amount if you have many groups.
+- **Empty groups don't send** — groups with no messages that day are logged (`status = empty`) but
+  not messaged. Only groups with activity produce a WhatsApp message.
+- **Group name in the header** — comes from `wag_groups.project_name`, set from the go-wa group name
+  at registration. If a header shows `Group`/`Grup xxxx`, re-run registration or fix it via *Save
+  group* / SQL `UPDATE wag_groups SET project_name = '…' WHERE chat_jid = '…'`.
 - **Change the run time** — edit the `Every day 23:00` schedule node. Running at 23:00 summarizes
   the current day; if you prefer next-morning, set e.g. 08:00 and adjust the SQL date window in
   `Get Today's Messages` to "yesterday".
