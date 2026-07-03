@@ -22,6 +22,7 @@ build step. You import the workflows into your own n8n instance, add credentials
 - [Tech stack](#tech-stack)
 - [Repository structure](#repository-structure)
 - [Prerequisites](#prerequisites)
+- [Full install from scratch (Docker Compose)](#full-install-from-scratch-docker-compose)
 - [Setup](#setup)
   - [1. go-wa (WhatsApp gateway)](#1-go-wa-whatsapp-gateway)
   - [2. Import the workflows](#2-import-the-workflows)
@@ -145,6 +146,8 @@ return "all of today's messages" in a single call. They communicate through thre
 │   └── wag-error-alert.json     # Error Trigger → WhatsApp alert to admin
 ├── db/
 │   └── schema.sql               # wag_groups, wag_messages, wag_summaries (optional; wizard does this)
+├── docker-compose.yml           # full stack: Postgres + go-wa + n8n, pre-wired
+├── .env.example                 # copy to .env for docker-compose
 ├── CLAUDE.md                    # architecture notes for AI coding assistants
 └── README.md
 ```
@@ -160,6 +163,49 @@ return "all of today's messages" in a single call. They communicate through thre
 - A **PostgreSQL** database n8n can connect to (the wizard creates the tables for you — you don't
   need `psql`).
 - A **Google AI Studio API key** for Gemini (<https://aistudio.google.com/app/apikey>).
+
+> New to all this? The [Docker Compose](#full-install-from-scratch-docker-compose) below brings up
+> n8n, go-wa, and Postgres for you — you only need Docker and the Gemini key.
+
+---
+
+## Full install from scratch (Docker Compose)
+
+Don't already run n8n / go-wa / Postgres? This starts all three, pre-wired (go-wa's webhook already
+points at n8n, and `GOWA_BASE_URL` / `WAG_ALERT_TO` are already set). **Requirements:** Docker +
+Docker Compose.
+
+**1. Get the code and configure secrets**
+
+```bash
+git clone https://github.com/inact25/n8n-wag-daily-summary.git
+cd n8n-wag-daily-summary
+cp .env.example .env
+# edit .env: set POSTGRES_PASSWORD, GOWA_USER/GOWA_PASS, WAG_ALERT_TO
+```
+
+**2. Start the stack**
+
+```bash
+docker compose up -d
+```
+
+- **n8n** → <http://localhost:5678> — create the owner account on first visit.
+- **go-wa** → <http://localhost:3000> — log in with the go-wa basic-auth user/pass, then **scan the
+  QR** (WhatsApp → *Linked devices*) to connect your WhatsApp account.
+
+**3. Credential values for this stack** (used in [step 3](#3-create-credentials) below)
+
+| Credential | Values |
+|-----------|--------|
+| Postgres | host `postgres`, port `5432`, database/user/password from your `.env`, SSL **disabled** |
+| go-wa basic auth | the `GOWA_USER` / `GOWA_PASS` from your `.env` |
+| Google Gemini (PaLM) API | your Google AI Studio API key |
+
+**4. What's already done for you** — Compose handles Setup steps **1** (go-wa) and **4** (env vars),
+and go-wa's webhook is already wired. So from the [Setup](#setup) section you only need:
+**step 2** (import workflows), **step 3** (create the 3 credentials above), **step 5** (Quick Setup),
+**step 6** (activate — the webhook is already pointed), and **step 7** (error alerts).
 
 ---
 
@@ -249,9 +295,10 @@ groups* to find it; you never type it by hand for Quick Setup.
 
 ### 6. Point the go-wa webhook and activate
 
-- Activate **WAG Chat — Ingest**, copy its **Production URL** from the `go-wa Webhook` node
-  (`https://<your-n8n-host>/webhook/wag-incoming`), and set that as go-wa's webhook (the exact
-  flag/env varies by go-wa version — typically `--webhook` or `WHATSAPP_WEBHOOK`).
+- Activate **WAG Chat — Ingest**. **Docker Compose users:** go-wa's webhook already points at
+  `http://n8n:5678/webhook/wag-incoming`, so you're done — just activate. Otherwise, copy the node's
+  **Production URL** (`https://<your-n8n-host>/webhook/wag-incoming`) and set it as go-wa's webhook
+  (the exact flag/env varies by go-wa version — typically `--webhook` or `WHATSAPP_WEBHOOK`).
 - Activate **WAG Chat — Daily Summary**. It runs every night at 23:00 Asia/Jakarta.
 
 ### 7. Wire up error alerts (recommended)

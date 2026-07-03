@@ -1,0 +1,61 @@
+# Full stack for wag-daily-summary: Postgres + go-wa + n8n, pre-wired.
+# Usage:
+#   cp .env.example .env   # then edit secrets
+#   docker compose up -d
+# Then: n8n at http://localhost:5678, go-wa at http://localhost:3000
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  gowa:
+    image: aldinokemal2104/go-whatsapp-web-multidevice:latest
+    restart: unless-stopped
+    # Pre-wires the webhook to the ingest workflow. If your go-wa version uses a
+    # different flag, set env WHATSAPP_WEBHOOK instead of --webhook.
+    command: >
+      rest
+      --port=3000
+      --basic-auth=${GOWA_USER}:${GOWA_PASS}
+      --webhook=http://n8n:5678/webhook/wag-incoming
+    ports:
+      - "3000:3000"        # open http://localhost:3000 to scan the login QR
+    volumes:
+      - gowa_storage:/app/storages
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      GENERIC_TIMEZONE: ${TZ}
+      TZ: ${TZ}
+      # Allow $env.* in expressions/Code (used for GOWA_BASE_URL / WAG_ALERT_TO).
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # Local HTTP only; set true + real host behind HTTPS in production.
+      N8N_SECURE_COOKIE: "false"
+      # App config the workflows read:
+      GOWA_BASE_URL: ${GOWA_BASE_URL}
+      WAG_ALERT_TO: ${WAG_ALERT_TO}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pg_data:
+  gowa_storage:
+  n8n_data:
