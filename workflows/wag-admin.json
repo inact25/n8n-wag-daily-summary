@@ -1,0 +1,601 @@
+{
+  "name": "WAG Chat — Admin / Setup Wizard",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "WAG Chat Admin",
+        "formDescription": "Setup & manage WhatsApp daily summaries — no SQL needed. Fill only the fields your action needs.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Action",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Install database schema"
+                  },
+                  {
+                    "option": "Show WhatsApp groups (from go-wa)"
+                  },
+                  {
+                    "option": "Save group (add or update)"
+                  },
+                  {
+                    "option": "List registered groups"
+                  },
+                  {
+                    "option": "Remove group"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Chat JID",
+              "fieldType": "text",
+              "placeholder": "1203...@g.us"
+            },
+            {
+              "fieldLabel": "Project name",
+              "fieldType": "text",
+              "placeholder": "WHNYHProject"
+            },
+            {
+              "fieldLabel": "Send to number",
+              "fieldType": "text",
+              "placeholder": "6285609200000"
+            },
+            {
+              "fieldLabel": "Active",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Yes"
+                  },
+                  {
+                    "option": "No"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ad-form",
+      "name": "Admin Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -200,
+        0
+      ],
+      "webhookId": "wag-admin-form"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Action }}",
+                    "rightValue": "Install database schema",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "install"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Action }}",
+                    "rightValue": "Show WhatsApp groups (from go-wa)",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "show"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Action }}",
+                    "rightValue": "Save group (add or update)",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "save"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Action }}",
+                    "rightValue": "List registered groups",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "list"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Action }}",
+                    "rightValue": "Remove group",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "remove"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ad-switch",
+      "name": "Route Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS wag_groups (\n    chat_jid     TEXT PRIMARY KEY,\n    project_name TEXT        NOT NULL,\n    send_to      TEXT        NOT NULL,\n    active       BOOLEAN     NOT NULL DEFAULT TRUE,\n    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()\n);\nCREATE TABLE IF NOT EXISTS wag_messages (\n    id          BIGSERIAL PRIMARY KEY,\n    message_id  TEXT        UNIQUE,\n    chat_jid    TEXT        NOT NULL,\n    sender_jid  TEXT,\n    sender_name TEXT,\n    message     TEXT,\n    media_type  TEXT,\n    is_group    BOOLEAN     NOT NULL DEFAULT TRUE,\n    \"timestamp\" TIMESTAMPTZ NOT NULL DEFAULT now(),\n    raw         TEXT\n);\nCREATE INDEX IF NOT EXISTS idx_wag_messages_chat_time ON wag_messages (chat_jid, \"timestamp\");\nCREATE TABLE IF NOT EXISTS wag_summaries (\n    id            BIGSERIAL PRIMARY KEY,\n    chat_jid      TEXT        NOT NULL,\n    summary_date  DATE        NOT NULL,\n    message_count INT         NOT NULL DEFAULT 0,\n    member_count  INT         NOT NULL DEFAULT 0,\n    status        TEXT        NOT NULL,\n    summary_text  TEXT,\n    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),\n    UNIQUE (chat_jid, summary_date)\n);",
+        "options": {}
+      },
+      "id": "ad-ddl",
+      "name": "Create Tables",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        280,
+        -300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ad-msg-install-a",
+              "name": "resultMessage",
+              "type": "string",
+              "value": "✅ Database schema installed / verified.\nTables: wag_groups, wag_messages, wag_summaries.\nNext: use \"Show WhatsApp groups (from go-wa)\" then \"Save group (add or update)\" to register groups."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ad-msg-install",
+      "name": "Msg: Installed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        520,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:3000/user/my/groups",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "ad-gowa",
+      "name": "go-wa: List Groups",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        -150
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_WITH_GOWA_BASIC_CRED_ID",
+          "name": "go-wa basic auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\nlet arr = (r.results && (r.results.data || r.results)) || r.data || r.groups || [];\nif (!Array.isArray(arr)) arr = [];\nconst lines = arr.map(g => '• ' + (g.name || g.subject || '(tanpa nama)') + '  —  ' + (g.JID || g.jid || g.id || ''));\nconst resultMessage = arr.length\n  ? ('Ditemukan ' + arr.length + ' grup. Salin JID (…@g.us) lalu pakai aksi \"' + 'Save group (add or update)' + '\":\\n\\n' + lines.join('\\n'))\n  : 'go-wa tidak mengembalikan grup. Cek kredensial / URL go-wa.';\nreturn [{ json: { resultMessage } }];"
+      },
+      "id": "ad-fmt-gowa",
+      "name": "Format go-wa Groups",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        -150
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO wag_groups (chat_jid, project_name, send_to, active)\nVALUES ($1,$2,$3,$4)\nON CONFLICT (chat_jid) DO UPDATE SET\n  project_name = EXCLUDED.project_name,\n  send_to = EXCLUDED.send_to,\n  active = EXCLUDED.active",
+        "options": {
+          "queryReplacement": "={{ [ $('Admin Form').item.json['Chat JID'], $('Admin Form').item.json['Project name'], $('Admin Form').item.json['Send to number'], ($('Admin Form').item.json['Active'] || 'Yes') === 'Yes' ] }}"
+        }
+      },
+      "id": "ad-save",
+      "name": "Upsert Group",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        280,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ad-msg-save-a",
+              "name": "resultMessage",
+              "type": "string",
+              "value": "={{ '✅ Group saved: ' + $('Admin Form').item.json['Project name'] + '  (' + $('Admin Form').item.json['Chat JID'] + ' → ' + $('Admin Form').item.json['Send to number'] + ')' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ad-msg-save",
+      "name": "Msg: Saved",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT chat_jid, project_name, send_to, active FROM wag_groups ORDER BY project_name",
+        "options": {}
+      },
+      "id": "ad-list",
+      "name": "Select Groups",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        280,
+        150
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json).filter(r => r && r.chat_jid);\nconst resultMessage = rows.length\n  ? ('Grup terdaftar (' + rows.length + '):\\n\\n' + rows.map(r =>\n      (r.active ? '🟢' : '⚪') + ' ' + r.project_name + '\\n    ' + r.chat_jid + '  →  ' + r.send_to).join('\\n'))\n  : 'Belum ada grup terdaftar. Gunakan aksi \"Save group (add or update)\".';\nreturn [{ json: { resultMessage } }];"
+      },
+      "id": "ad-fmt-list",
+      "name": "Format Registered",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM wag_groups WHERE chat_jid = $1",
+        "options": {
+          "queryReplacement": "={{ [ $('Admin Form').item.json['Chat JID'] ] }}"
+        }
+      },
+      "id": "ad-remove",
+      "name": "Delete Group",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        280,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ad-msg-remove-a",
+              "name": "resultMessage",
+              "type": "string",
+              "value": "={{ '🗑️ Removed group ' + $('Admin Form').item.json['Chat JID'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ad-msg-remove",
+      "name": "Msg: Removed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Done",
+        "completionMessage": "={{ $json.resultMessage }}",
+        "options": {}
+      },
+      "id": "ad-result",
+      "name": "Result",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        760,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Admin Form": {
+      "main": [
+        [
+          {
+            "node": "Route Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Action": {
+      "main": [
+        [
+          {
+            "node": "Create Tables",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "go-wa: List Groups",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upsert Group",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Select Groups",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delete Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Tables": {
+      "main": [
+        [
+          {
+            "node": "Msg: Installed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg: Installed": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "go-wa: List Groups": {
+      "main": [
+        [
+          {
+            "node": "Format go-wa Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format go-wa Groups": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Group": {
+      "main": [
+        [
+          {
+            "node": "Msg: Saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg: Saved": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Groups": {
+      "main": [
+        [
+          {
+            "node": "Format Registered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Registered": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Group": {
+      "main": [
+        [
+          {
+            "node": "Msg: Removed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg: Removed": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta"
+  },
+  "pinData": {}
+}

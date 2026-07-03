@@ -23,14 +23,14 @@ build step. You import the workflows into your own n8n instance, add credentials
 - [Repository structure](#repository-structure)
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
-  - [1. Database](#1-database)
-  - [2. go-wa (WhatsApp gateway)](#2-go-wa-whatsapp-gateway)
-  - [3. Import the workflows](#3-import-the-workflows)
-  - [4. Create credentials](#4-create-credentials)
-  - [5. Set configuration values](#5-set-configuration-values)
-  - [6. Register your groups](#6-register-your-groups)
+  - [1. go-wa (WhatsApp gateway)](#1-go-wa-whatsapp-gateway)
+  - [2. Import the workflows](#2-import-the-workflows)
+  - [3. Create credentials](#3-create-credentials)
+  - [4. Set configuration values](#4-set-configuration-values)
+  - [5. Run the setup wizard](#5-run-the-setup-wizard)
+  - [6. Point the go-wa webhook and activate](#6-point-the-go-wa-webhook-and-activate)
   - [7. Wire up error alerts](#7-wire-up-error-alerts)
-  - [8. Activate](#8-activate)
+  - [SQL alternative](#sql-alternative)
 - [How it works](#how-it-works)
 - [Configuration reference](#configuration-reference)
 - [Managing groups](#managing-groups)
@@ -67,8 +67,10 @@ Statistik:
 
 ## Features
 
-- **Multi-group** — summarize any number of groups from one workflow; add/remove a group by
-  editing a database row, no workflow changes.
+- **No-SQL setup wizard** — an in-n8n Form installs the database tables and adds/lists/removes
+  groups (and can list your WhatsApp groups from go-wa). You only provide a Postgres connection.
+- **Multi-group** — summarize any number of groups from one workflow; add/remove a group from the
+  wizard (or a database row), no workflow changes.
 - **Real-time ingestion** — every incoming message is captured via webhook and stored.
 - **Deduplication** — `message_id` is unique; webhook retries never double-count.
 - **Structured LLM output** — Gemini is forced (via a JSON schema) to return `topics[]` and
@@ -135,11 +137,12 @@ return "all of today's messages" in a single call. They communicate through thre
 ```
 .
 ├── workflows/
+│   ├── wag-admin.json           # Form wizard: install schema + manage groups (no SQL)
 │   ├── wag-chat-ingest.json     # go-wa webhook → normalize → Postgres (dedupe)
 │   ├── wag-daily-summary.json   # schedule 23:00 → loop groups → Gemini → send → log
 │   └── wag-error-alert.json     # Error Trigger → WhatsApp alert to admin
 ├── db/
-│   └── schema.sql               # wag_groups, wag_messages, wag_summaries
+│   └── schema.sql               # wag_groups, wag_messages, wag_summaries (optional; wizard does this)
 ├── CLAUDE.md                    # architecture notes for AI coding assistants
 └── README.md
 ```
@@ -152,106 +155,93 @@ return "all of today's messages" in a single call. They communicate through thre
 - A running **go-wa** instance, already logged in to the WhatsApp account, with:
   - its REST API reachable from n8n (default `http://localhost:3000`), and
   - HTTP Basic Auth enabled.
-- A **PostgreSQL** database n8n can connect to.
+- A **PostgreSQL** database n8n can connect to (the wizard creates the tables for you — you don't
+  need `psql`).
 - A **Google AI Studio API key** for Gemini (<https://aistudio.google.com/app/apikey>).
 
 ---
 
 ## Setup
 
-### 1. Database
+Everything except the Postgres server itself is done **inside n8n** — including creating the
+database tables and registering groups, via the **Admin / Setup Wizard** (an n8n Form). You never
+need to run `psql`. (A raw `db/schema.sql` is included for anyone who prefers SQL — see
+[the SQL alternative](#sql-alternative).)
 
-Run the schema against your Postgres database:
-
-```bash
-psql "$DATABASE_URL" -f db/schema.sql
-```
-
-This creates three tables:
-
-| Table | Purpose |
-|-------|---------|
-| `wag_groups` | Registry of groups to summarize. The summary workflow loops over every `active` row. |
-| `wag_messages` | Every ingested group message (deduped on `message_id`). |
-| `wag_summaries` | One row per group per day: counts, status, and the sent text. |
-
-### 2. go-wa (WhatsApp gateway)
+### 1. go-wa (WhatsApp gateway)
 
 Follow the [go-wa docs](https://github.com/aldinokemal/go-whatsapp-web-multidevice) to run the
-gateway and log in. Two things must be configured:
+gateway and log in. Enable **Basic auth** (so n8n can call it) and note its base URL
+(default `http://localhost:3000`). The webhook is configured in step 6.
 
-- **Basic auth** — so n8n can authenticate when sending messages.
-- **Webhook** — point go-wa's webhook at the ingest workflow's production URL (set in step 8):
+### 2. Import the workflows
 
-  ```
-  https://<your-n8n-host>/webhook/wag-incoming
-  ```
-
-  (The exact flag/env for the webhook URL varies by go-wa version — check its docs; it's
-  typically a `--webhook` flag or `WHATSAPP_WEBHOOK` setting.)
-
-To find a group's JID (needed in step 6), call go-wa's `GET /user/my/groups`, or read the
-`chat_id` field of any incoming message once ingestion is running. A group JID looks like
-`1203XXXXXXXXXXXXXX@g.us`.
-
-### 3. Import the workflows
-
-In n8n: **Add workflow → ⋯ menu → Import from File**, and import each file under `workflows/`.
+In n8n: **Add workflow → ⋯ menu → Import from File**, and import all four files under `workflows/`.
 Or via the CLI on a self-hosted instance:
 
 ```bash
+n8n import:workflow --input=workflows/wag-admin.json
 n8n import:workflow --input=workflows/wag-chat-ingest.json
 n8n import:workflow --input=workflows/wag-daily-summary.json
 n8n import:workflow --input=workflows/wag-error-alert.json
 ```
 
-### 4. Create credentials
+### 3. Create credentials
 
 Create these three credentials in n8n and assign them to the nodes that use them (imported nodes
 carry placeholder credential IDs you must replace):
 
 | Credential type | Used by | Notes |
 |-----------------|---------|-------|
-| **Postgres** | `Upsert Message`, `Get Active Groups`, `Get Today's Messages`, `Log Summary` | Your database connection. |
+| **Postgres** | admin `Create Tables` / `Upsert Group` / `Select Groups` / `Delete Group`, plus `Upsert Message`, `Get Active Groups`, `Get Today's Messages`, `Log Summary` | Your database connection. |
 | **Google Gemini (PaLM) API** | `Google Gemini Chat Model` | Paste your Google AI Studio API key. |
-| **HTTP Basic Auth** | `Send via go-wa`, `Send Alert via go-wa` | Your go-wa username/password. |
+| **HTTP Basic Auth** | `Send via go-wa`, `Send Alert via go-wa`, `go-wa: List Groups` | Your go-wa username/password. |
 
-### 5. Set configuration values
+### 4. Set configuration values
 
 | What | Where |
 |------|-------|
-| **go-wa base URL** | `Send via go-wa` (summary) and `Send Alert via go-wa` (error) — the URL field, default `http://localhost:3000`. |
+| **go-wa base URL** | `Send via go-wa`, `Send Alert via go-wa`, and admin `go-wa: List Groups` — the URL field, default `http://localhost:3000`. |
 | **Admin alert number** | `Build Alert` node in `wag-error-alert.json` — default `6285609200000`. |
 | **Schedule / timezone / model / message format** | See [Customization](#customization). |
 
-### 6. Register your groups
+### 5. Run the setup wizard
 
-Insert one row per group you want summarized:
+This creates the database tables and registers groups — no SQL. Open
+**WAG Chat — Admin / Setup Wizard** and click **Execute Workflow** (or open the form's test
+URL from the `Admin Form` node). A web form appears with an **Action** dropdown:
 
-```sql
-INSERT INTO wag_groups (chat_jid, project_name, send_to) VALUES
-  ('1203XXXXXXXXXXXXXX@g.us', 'WHNYHProject', '6285609200000'),
-  ('1203YYYYYYYYYYYYYY@g.us', 'Project B',    '6281234567890');
-```
+1. **Install database schema** — creates `wag_groups`, `wag_messages`, `wag_summaries` (idempotent;
+   safe to re-run). Do this once first.
+2. **Show WhatsApp groups (from go-wa)** — lists your WhatsApp groups with their JIDs so you can
+   copy the right `…@g.us`.
+3. **Save group (add or update)** — fill **Chat JID**, **Project name**, **Send to number**, and
+   **Active** to register (or update) a group. Repeat for each group.
+4. **List registered groups** / **Remove group** — review or delete entries anytime.
 
-- `chat_jid` — the WhatsApp group JID (`...@g.us`).
-- `project_name` — shown in the summary header (`<project_name> Daily Summary`).
-- `send_to` — phone number that receives this group's summary (digits only, no `+`).
+That's the entire database setup — no command line.
 
-### 7. Wire up error alerts
+### 6. Point the go-wa webhook and activate
+
+- Activate **WAG Chat — Ingest**, copy its **Production URL** from the `go-wa Webhook` node
+  (`https://<your-n8n-host>/webhook/wag-incoming`), and set that as go-wa's webhook (the exact
+  flag/env varies by go-wa version — typically `--webhook` or `WHATSAPP_WEBHOOK`).
+- Activate **WAG Chat — Daily Summary**. It runs every night at 23:00 Asia/Jakarta.
+
+### 7. Wire up error alerts (recommended)
 
 For each of `wag-chat-ingest` and `wag-daily-summary`, open **Settings → Error Workflow** and
 select **WAG Chat — Error Alert**. The Error Trigger only fires for workflows that name it, and
 the link can't be pre-baked into the JSON because workflow IDs don't exist until after import.
 
-### 8. Activate
+To test the summary immediately, open **WAG Chat — Daily Summary** and click **Execute Workflow** —
+it summarizes whatever is already in `wag_messages` for today.
 
-- Activate **WAG Chat — Ingest**, then copy its **Production URL** (from the `go-wa Webhook` node)
-  into go-wa's webhook setting (step 2).
-- Activate **WAG Chat — Daily Summary**. It will run every night at 23:00 Asia/Jakarta.
+### SQL alternative
 
-To test the summary immediately, open it and click **Execute Workflow** — it summarizes whatever
-is already in `wag_messages` for today.
+Prefer SQL, or automating provisioning? You can skip the wizard's "Install database schema" and
+"Save group" actions and run `db/schema.sql` plus `INSERT`s directly (see
+[Managing groups](#managing-groups)). The wizard and the SQL do exactly the same thing.
 
 ---
 
@@ -307,7 +297,8 @@ name, failing node, and error message; **Send Alert via go-wa** sends it to the 
 
 ## Managing groups
 
-No workflow edits required — just change the registry table:
+The easiest way is the **Admin / Setup Wizard** (step 5) — *Save group*, *List registered groups*,
+*Remove group*. If you'd rather use SQL, change the registry table directly:
 
 ```sql
 -- Add a group
@@ -382,6 +373,8 @@ In n8n itself, use **Executions** to inspect individual runs of each workflow.
 | Summary sends but stats say `0` / "no activity" | Nothing stored for that group today, or the group JID in `wag_groups` doesn't match what's ingested. Compare `chat_jid` values. |
 | Gemini errors / empty narrative | Bad/expired API key on `Google Gemini Chat Model`, quota exhausted, or model name typo. The run is still logged with status `error`. |
 | Message not delivered | Wrong go-wa base URL / basic-auth credential, `send_to` not in international digits (no `+`), or go-wa not logged in. |
+| Wizard form does nothing / "Save group" has no effect | Postgres credential not assigned on the admin nodes, or you skipped **Install database schema** first. Run that action once, then retry. |
+| "Show WhatsApp groups" returns nothing | go-wa basic-auth credential/URL wrong on `go-wa: List Groups`, or go-wa not logged in. |
 | Postgres node errors on import | n8n version differs from the exported node version (see below). Re-open and re-save the node. |
 
 **Version-sensitive spots** (glance at these after importing into a different n8n version):

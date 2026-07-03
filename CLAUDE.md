@@ -16,9 +16,12 @@ hand-editing JSON. The JSON here is generated/edited so the code-in-nodes stays 
 
 ## Architecture
 
-Two workflows share three Postgres tables (`db/schema.sql`). Ingestion (real-time) and
-summarization (daily batch) are decoupled because go-wa cannot return "all of today's messages"
-in one call.
+Three runtime workflows plus an admin wizard share three Postgres tables (`db/schema.sql`).
+Ingestion (real-time) and summarization (daily batch) are decoupled because go-wa cannot return
+"all of today's messages" in one call. **`wag-admin.json`** is an n8n Form (`formTrigger` →
+`switch` → per-action Postgres/HTTP → shared `form` completion page) that installs the schema and
+does group CRUD, so users never touch `psql`. It runs the same DDL as `db/schema.sql` and the same
+upsert as the SQL in the README — keep the two in sync if you change columns.
 
 ```
  wag-chat-ingest.json                         wag-daily-summary.json
@@ -65,10 +68,9 @@ in one call.
 
 ## Setup / configuration checklist
 
-1. Run `db/schema.sql` against the Postgres database.
-2. Register groups: insert rows into `wag_groups` (see the seed example at the bottom of the SQL).
-   Get a group's `chat_jid` from go-wa `GET /user/my/groups` or from an incoming webhook's
-   `chat_id`.
+1. Preferred: import `wag-admin.json`, run it, and use the form — *Install database schema*, then
+   *Show WhatsApp groups* / *Save group* to register. Equivalent to running `db/schema.sql` and
+   `INSERT`ing into `wag_groups` by hand (still supported for SQL-first setups).
 3. Create three n8n credentials and map them onto the placeholder-credential nodes:
    - **Postgres** — on `Upsert Message`, `Get Active Groups`, `Get Today's Messages`, `Log Summary`.
    - **Google Gemini (PaLM) API** (an API key from Google AI Studio) — on the
