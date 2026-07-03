@@ -38,7 +38,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Recipient: from wag_config (Get Config), then env WAG_ALERT_TO, then the constant.\nconst cfg = $('Get Config').first().json;\nconst to = cfg.alert_to || (typeof $env !== 'undefined' && $env.WAG_ALERT_TO) || '6285609200000';\nconst e = $json;\nconst ex = e.execution || {};\nconst wf = e.workflow || {};\nconst err = ex.error || {};\nconst t = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });\nconst message =\n  '⚠️ n8n Workflow Error\\n' +\n  'Workflow: ' + (wf.name || '-') + '\\n' +\n  'Node: ' + (ex.lastNodeExecuted || '-') + '\\n' +\n  'Error: ' + (err.message || '-') + '\\n' +\n  'Mode: ' + (ex.mode || '-') + '\\n' +\n  'Waktu: ' + t + (ex.url ? '\\nExecution: ' + ex.url : '');\nreturn [{ json: { phone: to, message } }];"
+        "jsCode": "// Recipient: from wag_config (Get Config), then env WAG_ALERT_TO, then the constant.\nconst cfg = $('Get Config').first().json;\nconst to = cfg.alert_to || (typeof $env !== 'undefined' && $env.WAG_ALERT_TO) || '6285609200000';\nconst e = $('On Workflow Error').first().json;\nconst ex = e.execution || {};\nconst wf = e.workflow || {};\nconst err = ex.error || {};\nconst t = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });\nconst message =\n  '⚠️ n8n Workflow Error\\n' +\n  'Workflow: ' + (wf.name || '-') + '\\n' +\n  'Node: ' + (ex.lastNodeExecuted || '-') + '\\n' +\n  'Error: ' + (err.message || '-') + '\\n' +\n  'Mode: ' + (ex.mode || '-') + '\\n' +\n  'Waktu: ' + t + (ex.url ? '\\nExecution: ' + ex.url : '');\nreturn [{ json: { phone: to, message } }];"
       },
       "id": "er-build",
       "name": "Build Alert",
