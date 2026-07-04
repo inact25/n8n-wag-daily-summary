@@ -36,7 +36,11 @@ Setup is Form-based so users never touch `psql`:
   Recent messages (JID filter, `LIMIT $2::int`), Daily summaries, go-wa config. Every SELECT is
   `alwaysOutputData: true` so an empty result still reaches its formatter (which prints a "No …"
   message). The optional filter is `WHERE ($1 = '' OR chat_jid = $1)`.
-  Two 🧪 **Test** actions are the only writes: *seed* registers a throwaway group
+  Write actions: **🏷️ Rename** (`UPDATE wag_groups SET project_name=$2 WHERE chat_jid=$1 AND $2<>''
+  RETURNING …`, params from *Filter: Chat JID* + *New name (for Rename)*; the `$2<>''` guard stops a
+  blank wiping the NOT NULL column; `RETURNING` lets the formatter report match/no-match) — fixes
+  groups go-wa registered under a placeholder name.
+  Two 🧪 **Test** actions are the only other writes: *seed* registers a throwaway group
   (`TEST_JID` = `120363000000000999@g.us`, name "🧪 Daily Summary TEST", recipient via
   `COALESCE(wag_config.alert_to, first active group's send_to, default)`) plus 3 messages backdated
   into **yesterday's** Asia/Jakarta window (`message_id` `wag-test-*`), so the real Daily Summary has

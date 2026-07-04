@@ -421,6 +421,11 @@ read-only form — pick a **View** and submit; nothing is ever written or delete
   counts, and the first line of each sent summary.
 - **go-wa config** — the `wag_config` key/values the workflows read.
 
+Plus one write action — **🏷️ Rename a group**: put a registered `1203…@g.us` in *Filter: Chat JID*
+and the header name you want in *New name (for Rename)*. It updates `wag_groups.project_name`, so the
+group's next summary header uses the new name. (A blank name is ignored; an unknown JID reports "nothing
+updated".) Handy when go-wa registered your groups with a placeholder name like "Group".
+
 ### Test the daily summary now (no waiting, no SQL)
 
 The daily run summarizes **yesterday**, so if all your messages are from today, a manual run finds

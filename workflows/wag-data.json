@@ -30,6 +30,9 @@
                     "option": "go-wa config"
                   },
                   {
+                    "option": "🏷️ Rename a group (set the summary header name)"
+                  },
+                  {
                     "option": "🧪 Test: seed sample chat into yesterday"
                   },
                   {
@@ -41,7 +44,12 @@
             {
               "fieldLabel": "Filter: Chat JID",
               "fieldType": "text",
-              "placeholder": "optional — 1203...@g.us (Recent messages / Daily summaries)"
+              "placeholder": "optional — 1203...@g.us (Recent messages / Daily summaries / Rename)"
+            },
+            {
+              "fieldLabel": "New name (for Rename)",
+              "fieldType": "text",
+              "placeholder": "only for Rename — the header name to set"
             },
             {
               "fieldLabel": "Limit",
@@ -195,6 +203,29 @@
               },
               "renameOutput": true,
               "outputKey": "config"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.View }}",
+                    "rightValue": "🏷️ Rename a group (set the summary header name)",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "rename"
             },
             {
               "conditions": {
@@ -437,6 +468,43 @@
     {
       "parameters": {
         "operation": "executeQuery",
+        "query": "UPDATE wag_groups SET project_name = $2\nWHERE chat_jid = $1 AND $2 <> ''\nRETURNING chat_jid, project_name",
+        "options": {
+          "queryReplacement": "={{ [ ($('Data Form').item.json['Filter: Chat JID'] || ''), ($('Data Form').item.json['New name (for Rename)'] || '') ] }}"
+        }
+      },
+      "id": "dt-q-rename",
+      "name": "Rename Group",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        200,
+        450
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json).filter(r => r && r.chat_jid);\nconst resultMessage = rows.length\n  ? ('🏷️ Renamed: ' + rows[0].chat_jid + ' → \"' + rows[0].project_name + '\".\\n\\nThe next summary for this group uses the new name in its header.')\n  : 'Nothing updated. Put an already-registered JID (1203...@g.us) in \"Filter: Chat JID\" and a non-empty name in \"New name (for Rename)\".';\nreturn [{ json: { resultMessage } }];"
+      },
+      "id": "dt-f-rename",
+      "name": "Format Rename",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
         "query": "INSERT INTO wag_groups (chat_jid, project_name, send_to, active)\nVALUES ('120363000000000999@g.us', '🧪 Daily Summary TEST',\n        COALESCE((SELECT value FROM wag_config WHERE key = 'alert_to'),\n                 (SELECT send_to FROM wag_groups WHERE active ORDER BY created_at LIMIT 1),\n                 '6285609200000'), true)\nON CONFLICT (chat_jid) DO UPDATE SET project_name = EXCLUDED.project_name, send_to = EXCLUDED.send_to, active = true;\nINSERT INTO wag_messages (message_id, chat_jid, sender_jid, sender_name, message, is_group, \"timestamp\")\nVALUES\n  ('wag-test-1', '120363000000000999@g.us', 'tester1@lid', 'Tester Satu', 'Halo tim, ini pesan uji untuk ringkasan harian.', true, (date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta') - interval '1 day' + interval '9 hours')  AT TIME ZONE 'Asia/Jakarta'),\n  ('wag-test-2', '120363000000000999@g.us', 'tester2@lid', 'Tester Dua',  'Setuju, meeting jam 3 sore ya, tolong siapkan slide.',   true, (date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta') - interval '1 day' + interval '11 hours') AT TIME ZONE 'Asia/Jakarta'),\n  ('wag-test-3', '120363000000000999@g.us', 'tester1@lid', 'Tester Satu', 'Oke sudah saya siapkan. Deploy fitur baru selesai malam ini.', true, (date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta') - interval '1 day' + interval '14 hours') AT TIME ZONE 'Asia/Jakarta')\nON CONFLICT (message_id) DO NOTHING;",
         "options": {}
       },
@@ -446,7 +514,7 @@
       "typeVersion": 2.6,
       "position": [
         200,
-        450
+        600
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -476,7 +544,7 @@
       "typeVersion": 3.4,
       "position": [
         440,
-        450
+        600
       ]
     },
     {
@@ -491,7 +559,7 @@
       "typeVersion": 2.6,
       "position": [
         200,
-        600
+        750
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -521,7 +589,7 @@
       "typeVersion": 3.4,
       "position": [
         440,
-        600
+        750
       ]
     },
     {
@@ -586,6 +654,13 @@
         [
           {
             "node": "Query Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rename Group",
             "type": "main",
             "index": 0
           }
@@ -706,6 +781,28 @@
       ]
     },
     "Format Config": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rename Group": {
+      "main": [
+        [
+          {
+            "node": "Format Rename",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Rename": {
       "main": [
         [
           {
