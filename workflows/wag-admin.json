@@ -33,6 +33,9 @@
                     "option": "Remove group"
                   },
                   {
+                    "option": "Refresh group names from go-wa"
+                  },
+                  {
                     "option": "Show raw go-wa group (debug names)"
                   }
                 ]
@@ -266,6 +269,29 @@
                 "conditions": [
                   {
                     "leftValue": "={{ $('Admin Form').item.json['Action'] }}",
+                    "rightValue": "Refresh group names from go-wa",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "refresh"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Admin Form').item.json['Action'] }}",
                     "rightValue": "Show raw go-wa group (debug names)",
                     "operator": {
                       "type": "string",
@@ -370,7 +396,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r = $json;\nconst res = r.results || r;\nlet arr = res.groups || res.data || (Array.isArray(res) ? res : []);\nif (!Array.isArray(arr)) arr = [];\nconst lines = arr.map(g => '• ' + (g.subject || g.name || '(tanpa nama)') + '  —  ' + (g.id || g.jid || g.JID || ''));\nconst resultMessage = arr.length\n  ? ('Ditemukan ' + arr.length + ' grup. Salin JID (…@g.us) lalu pakai aksi \"' + 'Save group (add or update)' + '\":\\n\\n' + lines.join('\\n'))\n  : 'go-wa tidak mengembalikan grup. Cek kredensial / URL go-wa.';\nreturn [{ json: { resultMessage } }];"
+        "jsCode": "const r = $json;\nconst res = r.results || r;\nlet arr = res.groups || res.data || (Array.isArray(res) ? res : []);\nif (!Array.isArray(arr)) arr = [];\nconst lines = arr.map(g => '• ' + (g.Name || g.subject || g.name || g.Subject || '(tanpa nama)') + '  —  ' + (g.JID || g.id || g.jid || ''));\nconst resultMessage = arr.length\n  ? ('Ditemukan ' + arr.length + ' grup. Salin JID (…@g.us) lalu pakai aksi \"' + 'Save group (add or update)' + '\":\\n\\n' + lines.join('\\n'))\n  : 'go-wa tidak mengembalikan grup. Cek kredensial / URL go-wa.';\nreturn [{ json: { resultMessage } }];"
       },
       "id": "ad-fmt-gowa",
       "name": "Format go-wa Groups",
@@ -462,7 +488,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r = $json;\nconst res = r.results || r;\nlet arr = res.groups || res.data || (Array.isArray(res) ? res : []);\nif (!Array.isArray(arr)) arr = [];\nconst sendTo = $('Admin Form').first().json['Send to number'];\nif (!sendTo) throw new Error('Isi kolom \"Send to number\" untuk bulk register (dipakai untuk semua grup).');\nconst rows = arr\n  .map(g => {\n    const jid = g.id || g.jid || g.JID || '';\n    const name = g.subject || g.name || g.Subject || g.Name || ('Grup ' + String(jid).split('@')[0].slice(-4));\n    return { chat_jid: jid, project_name: name, send_to: sendTo };\n  })\n  .filter(x => String(x.chat_jid).endsWith('@g.us'));\nif (!rows.length) throw new Error('go-wa tidak mengembalikan grup untuk didaftarkan.');\nreturn rows.map(x => ({ json: x }));"
+        "jsCode": "const r = $json;\nconst res = r.results || r;\nlet arr = res.groups || res.data || (Array.isArray(res) ? res : []);\nif (!Array.isArray(arr)) arr = [];\nconst sendTo = $('Admin Form').first().json['Send to number'];\nif (!sendTo) throw new Error('Isi kolom \"Send to number\" untuk bulk register (dipakai untuk semua grup).');\nconst rows = arr\n  .map(g => {\n    const jid = g.JID || g.id || g.jid || '';\n    const raw = String(g.Name || g.subject || g.name || g.Subject || '').trim();\n    // go-wa returns the subject in Name; ignore blanks and the \"Group\" placeholder\n    // (sent before the device syncs metadata) so we do not store junk names.\n    const name = (raw && raw.toLowerCase() !== 'group') ? raw : ('Grup ' + String(jid).split('@')[0].slice(-4));\n    return { chat_jid: jid, project_name: name, send_to: sendTo };\n  })\n  .filter(x => String(x.chat_jid).endsWith('@g.us'));\nif (!rows.length) throw new Error('go-wa tidak mengembalikan grup untuk didaftarkan.');\nreturn rows.map(x => ({ json: x }));"
       },
       "id": "ad-map",
       "name": "Map Groups to Rows",
@@ -639,6 +665,88 @@
     },
     {
       "parameters": {
+        "method": "GET",
+        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || $('Get Config').first().json.gowa_base_url || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Device-Id",
+              "value": "={{ ($('Admin Form').item.json['go-wa device id'] || $('Get Config').first().json.gowa_device_id || '') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ad-gowa-ref",
+      "name": "go-wa: Groups (refresh)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        800
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_WITH_GOWA_BASIC_CRED_ID",
+          "name": "go-wa basic auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\nconst res = r.results || r;\nlet arr = res.groups || res.data || (Array.isArray(res) ? res : []);\nif (!Array.isArray(arr)) arr = [];\nconst rows = arr.map(g => {\n  const jid = g.JID || g.id || g.jid || '';\n  const name = g.Name || g.subject || g.name || g.Subject || '';\n  return { chat_jid: jid, project_name: String(name).trim() };\n}).filter(x => String(x.chat_jid).endsWith('@g.us') && x.project_name && x.project_name.toLowerCase() !== 'group');\nif (!rows.length) throw new Error('go-wa returned no usable group names. If names are still blank, the device may not have synced group metadata yet — try again later.');\nreturn rows.map(x => ({ json: x }));"
+      },
+      "id": "ad-map-ref",
+      "name": "Map Names",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE wag_groups SET project_name = $2 WHERE chat_jid = $1 RETURNING chat_jid, project_name",
+        "options": {
+          "queryReplacement": "={{ [ $json.chat_jid, $json.project_name ] }}"
+        }
+      },
+      "id": "ad-upd-ref",
+      "name": "Update Names",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        720,
+        800
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const updated = $('Update Names').all().map(i => i.json).filter(r => r && r.chat_jid);\nconst head = updated.slice(0, 15).map(r => '• ' + r.project_name + '  (' + r.chat_jid + ')').join('\\n');\nconst resultMessage = updated.length\n  ? ('✅ Refreshed names for ' + updated.length + ' registered group(s) from go-wa:\\n\\n' + head +\n     (updated.length > 15 ? '\\n… and ' + (updated.length - 15) + ' more.' : ''))\n  : 'No registered groups matched the go-wa list — nothing to update. (Names are only refreshed for groups already in wag_groups.)';\nreturn [{ json: { resultMessage } }];"
+      },
+      "id": "ad-res-ref",
+      "name": "Refresh Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        800
+      ]
+    },
+    {
+      "parameters": {
         "operation": "completion",
         "completionTitle": "Done",
         "completionMessage": "={{ $json.resultMessage }}",
@@ -717,6 +825,13 @@
         [
           {
             "node": "Delete Group",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "go-wa: Groups (refresh)",
             "type": "main",
             "index": 0
           }
@@ -896,6 +1011,50 @@
       ]
     },
     "Raw Groups Debug": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "go-wa: Groups (refresh)": {
+      "main": [
+        [
+          {
+            "node": "Map Names",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Names": {
+      "main": [
+        [
+          {
+            "node": "Update Names",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Names": {
+      "main": [
+        [
+          {
+            "node": "Refresh Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh Result": {
       "main": [
         [
           {

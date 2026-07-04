@@ -388,6 +388,13 @@ The easiest way is **Quick Setup** (registers all groups at once). To adjust ind
 use **Manage Groups (Advanced)**: *Save group* / *List registered groups* / *Remove group*. If you'd
 rather use SQL, change the registry table directly:
 
+> **Groups all named "Group"?** go-wa only returns real group names once your device has synced
+> group metadata — if you registered right after connecting, names come back as a placeholder. Fix
+> them without re-registering: **Manage Groups (Advanced)** → **Refresh group names from go-wa**. It
+> updates `project_name` for the groups you already track (leaving recipients/active untouched) and
+> skips any still-blank ones. For a one-off, the Data Browser's **🏷️ Rename a group** sets a single
+> group's header name.
+
 ```sql
 -- Add a group
 INSERT INTO wag_groups (chat_jid, project_name, send_to)

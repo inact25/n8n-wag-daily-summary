@@ -25,8 +25,15 @@ Setup is Form-based so users never touch `psql`:
   *recipient number* field) → install DDL → fetch go-wa groups → register **all** of them → done.
   No action dropdown, no Chat JID.
 - **`wag-admin.json`** ("Manage Groups (Advanced)") — `formTrigger` → **`Get Config`** → `switch`
-  (Install / Show groups / Bulk / Save / List / Remove / Debug) → per-action Postgres/HTTP → shared
-  `form` completion page. Because a `Get Config` (Postgres) node sits before the switch and replaces
+  (Install / Show groups / Bulk / Save / List / Remove / Refresh names / Debug) → per-action
+  Postgres/HTTP → shared `form` completion page. **Group names:** go-wa returns the subject in
+  `Name` (capital) and the JID in `JID`; registration extractors read `g.Name || g.subject ||
+  g.name || g.Subject` and treat blank/"Group" (go-wa's pre-sync placeholder) as no-name. The
+  **Refresh names** action (`go-wa: Groups (refresh)` → `Map Names` → `Update Names` → `Refresh
+  Result`) re-reads current names and `UPDATE wag_groups SET project_name … WHERE chat_jid=$1`
+  **only for already-registered rows** (never adds/removes, never touches `send_to`/`active`); the
+  per-item UPDATE uses `RETURNING` so the result node can count what actually changed. Use it after
+  the device has synced group metadata to replace placeholder names. Because a `Get Config` (Postgres) node sits before the switch and replaces
   `$json`, the switch uses `adminRule` (reads `$('Admin Form').item.json['Action']`, not `$json`).
   **No `$env`:** the go-wa URL/device for Show/Bulk/Debug resolve
   form field → `$('Get Config')` (`wag_config`) → literal default — self-hosted n8n that blocks
