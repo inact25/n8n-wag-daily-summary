@@ -127,12 +127,13 @@ return "all of today's messages" in a single call. They communicate through thre
 
 ## Tech stack
 
-| Component | Role |
-|-----------|------|
-| **n8n** | Orchestration / workflow engine (self-hosted recommended). |
-| **go-whatsapp-web-multidevice** ("go-wa") | WhatsApp gateway — receives messages (webhook) and sends messages (REST API). |
-| **PostgreSQL** | Stores the group registry, ingested messages, and the daily run log. |
-| **Google Gemini** (`gemini-2.5-flash`) | Writes the topic/action-item narrative via n8n's native LangChain nodes. |
+| Component | Role | Source |
+|-----------|------|--------|
+| **n8n** | Orchestration / workflow engine (self-hosted recommended). | [github.com/n8n-io/n8n](https://github.com/n8n-io/n8n) |
+| **go-whatsapp-web-multidevice** ("go-wa") | WhatsApp gateway — receives messages (webhook) and sends messages (REST API). | [github.com/aldinokemal/go-whatsapp-web-multidevice](https://github.com/aldinokemal/go-whatsapp-web-multidevice) |
+| **PostgreSQL** | Stores the group registry, ingested messages, and the daily run log. | [postgresql.org](https://www.postgresql.org/) |
+| **Google Gemini** (`gemini-2.5-flash`) | Writes the topic/action-item narrative via n8n's native LangChain nodes. | [ai.google.dev](https://ai.google.dev/) |
+| **This project** | The exported n8n workflow JSON in this repo. | [github.com/inact25/n8n-wag-daily-summary](https://github.com/inact25/n8n-wag-daily-summary) |
 
 ---
 
