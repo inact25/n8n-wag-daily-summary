@@ -22,6 +22,7 @@ build step. You import the workflows into your own n8n instance, add credentials
 - [Tech stack](#tech-stack)
 - [Repository structure](#repository-structure)
 - [Prerequisites](#prerequisites)
+- [Already have n8n? (quick path)](#already-have-n8n-quick-path)
 - [Full install from scratch (Docker Compose)](#full-install-from-scratch-docker-compose)
 - [Setup](#setup)
   - [1. go-wa (WhatsApp gateway)](#1-go-wa-whatsapp-gateway)
@@ -32,6 +33,7 @@ build step. You import the workflows into your own n8n instance, add credentials
   - [6. Point the go-wa webhook and activate](#6-point-the-go-wa-webhook-and-activate)
   - [7. Wire up error alerts](#7-wire-up-error-alerts)
   - [SQL alternative](#sql-alternative)
+- [How to run (step by step)](#how-to-run-step-by-step)
 - [How it works](#how-it-works)
 - [Configuration reference](#configuration-reference)
 - [Managing groups](#managing-groups)
@@ -171,6 +173,26 @@ return "all of today's messages" in a single call. They communicate through thre
 
 ---
 
+## Already have n8n? (quick path)
+
+Already running **n8n**, **go-wa**, and **Postgres**? Skip the Docker Compose section entirely — you
+only need the [Setup](#setup) steps. The short version:
+
+1. **Import** the seven `workflows/*.json` files into n8n ([Setup step 2](#2-import-the-workflows)).
+2. **Create 3 credentials** — Postgres, Google Gemini (PaLM) API, and HTTP Basic Auth for go-wa —
+   and map them onto the placeholder nodes ([Setup step 3](#3-create-credentials)).
+3. **Run Quick Setup** — open *WAG Chat — Quick Setup*, enter the recipient number, submit. It
+   installs the DB schema and registers all your groups
+   ([Setup step 5](#5-run-quick-setup-recommended)).
+4. **Point go-wa's webhook** at `https://<n8n-host>/webhook/wag-incoming`, then **activate** the
+   Ingest + Daily Summary workflows
+   ([Setup step 6](#6-point-the-go-wa-webhook-and-activate)).
+5. **Wire error alerts** ([Setup step 7](#7-wire-up-error-alerts)) — optional but recommended.
+
+Then jump to [How to run](#how-to-run-step-by-step) to trigger it and confirm it works.
+
+---
+
 ## Full install from scratch (Docker Compose)
 
 Don't already run n8n / go-wa / Postgres? This starts all three, pre-wired (go-wa's webhook already
@@ -226,7 +248,7 @@ gateway and log in. Enable **Basic auth** (so n8n can call it) and note its base
 
 ### 2. Import the workflows
 
-In n8n: **Add workflow → ⋯ menu → Import from File**, and import all four files under `workflows/`.
+In n8n: **Add workflow → ⋯ menu → Import from File**, and import all seven files under `workflows/`.
 Or via the CLI on a self-hosted instance:
 
 ```bash
@@ -251,7 +273,7 @@ carry placeholder credential IDs you must replace):
 |-----------------|---------|-------|
 | **Postgres** | admin `Create Tables` / `Upsert Group` / `Select Groups` / `Delete Group`, plus `Upsert Message`, `Get Active Groups`, `Get Today's Messages`, `Log Summary` | Your database connection. |
 | **Google Gemini (PaLM) API** | `Google Gemini Chat Model` | Paste your Google AI Studio API key. |
-| **HTTP Basic Auth** | `Send via go-wa`, `Send Alert via go-wa`, `go-wa: List Groups` | Your go-wa username/password. |
+| **HTTP Basic Auth** | `Send via go-wa`, `Send Alert via go-wa`, and the admin `go-wa: …` group nodes (List / Raw / Groups refresh) | Your go-wa username/password. |
 
 ### 4. Configure go-wa settings
 
@@ -303,6 +325,8 @@ Need different recipients per group, or to disable/remove one? Open **WAG Chat �
 | Save group (add or update) | Add/edit one group — needs **Chat JID**, **Project name**, **Send to number**, **Active**. |
 | List registered groups | Shows what's currently registered. |
 | Remove group | Deletes one group by **Chat JID**. |
+| Refresh group names from go-wa | Re-reads current group names and updates `project_name` for **already-registered** groups only (recipients/active untouched). Use after the device syncs metadata to replace placeholder names. |
+| Show raw go-wa group (debug names) | Dumps the raw go-wa group JSON (wrapper + first-group keys + first objects) to diagnose where the group name lives — used when bulk register produced placeholder names like "Group". |
 
 A **Chat JID** is a group's WhatsApp address, like `1203XXXXXXXXXXXXXX@g.us` — use *Show WhatsApp
 groups* to find it; you never type it by hand for Quick Setup.
@@ -329,6 +353,38 @@ it summarizes whatever is already in `wag_messages` for today.
 Prefer SQL, or automating provisioning? You can skip the wizard's "Install database schema" and
 "Save group" actions and run `db/schema.sql` plus `INSERT`s directly (see
 [Managing groups](#managing-groups)). The wizard and the SQL do exactly the same thing.
+
+---
+
+## How to run (step by step)
+
+Once [Setup](#setup) is done, here's the full run — from first message to first summary:
+
+1. **Confirm ingestion is live.** Send a message in one of your WhatsApp groups, then open
+   *WAG Chat — Data Browser* → **Overview** (or run
+   `SELECT count(*), max("timestamp") FROM wag_messages;`). A rising count means the webhook works.
+   If it stays at `0`, check [Troubleshooting](#troubleshooting).
+2. **Let it collect.** Messages accumulate as they arrive. The daily job summarizes the **previous
+   full day**, so it needs at least one day of history before it has anything to say.
+3. **Run the summary — on schedule or on demand.** *WAG Chat — Daily Summary* fires automatically at
+   **07:00 Asia/Jakarta**. To run it yourself, open it and click **Execute Workflow**. It loops
+   every active group that had messages yesterday, summarizes each with Gemini, and sends the result
+   to that group's recipient.
+4. **Don't want to wait a day? Use the built-in test path:**
+   - *WAG Chat — Data Browser* → **🧪 Test: seed sample chat into yesterday** — creates a throwaway
+     group with 3 backdated messages, using your configured recipient.
+   - *WAG Chat — Daily Summary* → **Execute Workflow** — it summarizes the test group and sends the
+     summary to your number (the real send path).
+   - *WAG Chat — Data Browser* → **🧪 Test: remove seeded test data** — cleans up; your real data is
+     never touched.
+5. **Verify the result.** Check the recipient's WhatsApp for the message, and the audit trail:
+   *WAG Chat — Data Browser* → **Daily summaries**, or
+   `SELECT summary_date, chat_jid, status FROM wag_summaries ORDER BY created_at DESC LIMIT 20;`.
+   Status `success` = sent, `empty` = no activity (logged, not messaged), `error` = inspect the run
+   in n8n **Executions**.
+
+That's the whole loop: messages ingest continuously, and once a day (or on demand) every active
+group with activity gets its own summary.
 
 ---
 
