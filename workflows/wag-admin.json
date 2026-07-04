@@ -70,12 +70,12 @@
             {
               "fieldLabel": "go-wa base URL",
               "fieldType": "text",
-              "placeholder": "http://localhost:3000"
+              "placeholder": "blank = use saved wag_config value"
             },
             {
               "fieldLabel": "go-wa device id",
               "fieldType": "text",
-              "placeholder": "leave blank if GOWA_DEVICE_ID env is set"
+              "placeholder": "blank = use saved wag_config value"
             }
           ]
         },
@@ -93,6 +93,28 @@
     },
     {
       "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  max(NULLIF(value, '')) FILTER (WHERE key = 'gowa_base_url')  AS gowa_base_url,\n  max(NULLIF(value, '')) FILTER (WHERE key = 'gowa_device_id') AS gowa_device_id,\n  max(NULLIF(value, '')) FILTER (WHERE key = 'alert_to')       AS alert_to\nFROM wag_config",
+        "options": {}
+      },
+      "id": "ad-config",
+      "name": "Get Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -40,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
         "rules": {
           "values": [
             {
@@ -105,7 +127,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.Action }}",
+                    "leftValue": "={{ $('Admin Form').item.json['Action'] }}",
                     "rightValue": "Install database schema",
                     "operator": {
                       "type": "string",
@@ -128,7 +150,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.Action }}",
+                    "leftValue": "={{ $('Admin Form').item.json['Action'] }}",
                     "rightValue": "Show WhatsApp groups (from go-wa)",
                     "operator": {
                       "type": "string",
@@ -151,7 +173,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.Action }}",
+                    "leftValue": "={{ $('Admin Form').item.json['Action'] }}",
                     "rightValue": "Save group (add or update)",
                     "operator": {
                       "type": "string",
@@ -174,7 +196,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.Action }}",
+                    "leftValue": "={{ $('Admin Form').item.json['Action'] }}",
                     "rightValue": "Register ALL WhatsApp groups (bulk)",
                     "operator": {
                       "type": "string",
@@ -197,7 +219,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.Action }}",
+                    "leftValue": "={{ $('Admin Form').item.json['Action'] }}",
                     "rightValue": "List registered groups",
                     "operator": {
                       "type": "string",
@@ -220,7 +242,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.Action }}",
+                    "leftValue": "={{ $('Admin Form').item.json['Action'] }}",
                     "rightValue": "Remove group",
                     "operator": {
                       "type": "string",
@@ -243,7 +265,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.Action }}",
+                    "leftValue": "={{ $('Admin Form').item.json['Action'] }}",
                     "rightValue": "Show raw go-wa group (debug names)",
                     "operator": {
                       "type": "string",
@@ -317,7 +339,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || $env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
+        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || $('Get Config').first().json.gowa_base_url || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
         "sendHeaders": true,
@@ -325,7 +347,7 @@
           "parameters": [
             {
               "name": "X-Device-Id",
-              "value": "={{ ($('Admin Form').item.json['go-wa device id'] || $env.GOWA_DEVICE_ID || '') }}"
+              "value": "={{ ($('Admin Form').item.json['go-wa device id'] || $('Get Config').first().json.gowa_device_id || '') }}"
             }
           ]
         },
@@ -409,7 +431,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || $env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
+        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || $('Get Config').first().json.gowa_base_url || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
         "sendHeaders": true,
@@ -417,7 +439,7 @@
           "parameters": [
             {
               "name": "X-Device-Id",
-              "value": "={{ ($('Admin Form').item.json['go-wa device id'] || $env.GOWA_DEVICE_ID || '') }}"
+              "value": "={{ ($('Admin Form').item.json['go-wa device id'] || $('Get Config').first().json.gowa_device_id || '') }}"
             }
           ]
         },
@@ -573,7 +595,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || $env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
+        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || $('Get Config').first().json.gowa_base_url || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
         "sendHeaders": true,
@@ -581,7 +603,7 @@
           "parameters": [
             {
               "name": "X-Device-Id",
-              "value": "={{ ($('Admin Form').item.json['go-wa device id'] || $env.GOWA_DEVICE_ID || '') }}"
+              "value": "={{ ($('Admin Form').item.json['go-wa device id'] || $('Get Config').first().json.gowa_device_id || '') }}"
             }
           ]
         },
@@ -634,6 +656,17 @@
   ],
   "connections": {
     "Admin Form": {
+      "main": [
+        [
+          {
+            "node": "Get Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Config": {
       "main": [
         [
           {

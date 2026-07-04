@@ -24,11 +24,16 @@ Setup is Form-based so users never touch `psql`:
 - **`wag-setup.json`** ("Quick Setup") — the beginner path. One linear flow: Form (single
   *recipient number* field) → install DDL → fetch go-wa groups → register **all** of them → done.
   No action dropdown, no Chat JID.
-- **`wag-admin.json`** ("Manage Groups (Advanced)") — `formTrigger` → `switch` (Install / Show
-  groups / Bulk / Save / List / Remove / Debug) → per-action Postgres/HTTP → shared `form` completion
-  page. The **Debug** action (`go-wa: Raw Groups` → `Raw Groups Debug`) dumps the raw go-wa group
-  JSON (wrapper keys + first-group keys + first 3 objects) to diagnose where the group name/subject
-  lives — used when bulk register produced placeholder names like "Group".
+- **`wag-admin.json`** ("Manage Groups (Advanced)") — `formTrigger` → **`Get Config`** → `switch`
+  (Install / Show groups / Bulk / Save / List / Remove / Debug) → per-action Postgres/HTTP → shared
+  `form` completion page. Because a `Get Config` (Postgres) node sits before the switch and replaces
+  `$json`, the switch uses `adminRule` (reads `$('Admin Form').item.json['Action']`, not `$json`).
+  **No `$env`:** the go-wa URL/device for Show/Bulk/Debug resolve
+  form field → `$('Get Config')` (`wag_config`) → literal default — self-hosted n8n that blocks
+  `$env` no longer errors when the form's go-wa fields are left blank. The **Debug** action
+  (`go-wa: Raw Groups` → `Raw Groups Debug`) dumps the raw go-wa group JSON (wrapper keys +
+  first-group keys + first 3 objects) to diagnose where the group name/subject lives — used when
+  bulk register produced placeholder names like "Group".
 - **`wag-reset.json`** ("Reset / Cleanup") — `formTrigger` → IF (`Confirm == 'RESET'`) → `switch`
   (groups / messages / summaries / config / full) → `DELETE FROM …` → completion page. Deletes rows,
   keeps tables. Same setMsg/switchRule helpers as admin.
