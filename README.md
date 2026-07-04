@@ -145,7 +145,7 @@ return "all of today's messages" in a single call. They communicate through thre
 │   ├── wag-daily-summary.json   # schedule 07:00 → loop groups → Gemini → send → log
 │   ├── wag-error-alert.json     # Error Trigger → WhatsApp alert to admin
 │   ├── wag-reset.json           # Form: wipe groups/messages/summaries/config (typed confirm)
-│   └── wag-data.json            # Data Browser form: view groups/messages/summaries/config (read-only)
+│   └── wag-data.json            # Data Browser & Test form: view data + seed/run/cleanup a test summary
 ├── db/
 │   └── schema.sql               # wag_groups, wag_messages, wag_summaries (optional; wizard does this)
 ├── docker-compose.yml           # full stack: Postgres + go-wa + n8n, pre-wired
@@ -420,6 +420,21 @@ read-only form — pick a **View** and submit; nothing is ever written or delete
 - **Daily summaries** — the `wag_summaries` audit trail: date, status (`success`/`empty`/`error`),
   counts, and the first line of each sent summary.
 - **go-wa config** — the `wag_config` key/values the workflows read.
+
+### Test the daily summary now (no waiting, no SQL)
+
+The daily run summarizes **yesterday**, so if all your messages are from today, a manual run finds
+nothing (`Get Active Groups` returns 0 rows — that's correct, not a bug). To see the whole pipeline
+work on demand, the **Data Browser & Test** form has two 🧪 actions:
+
+1. Run **🧪 Test: seed sample chat into yesterday** — registers a throwaway group
+   *"🧪 Daily Summary TEST"* with 3 messages backdated into yesterday's window. The recipient is
+   pulled from your existing config so the real send path is used.
+2. Open **WAG Chat — Daily Summary** and click **Test workflow** (top toolbar). It finds the test
+   group, summarizes it with Gemini, and sends the summary to your configured number — the full
+   real path.
+3. Run **🧪 Test: remove seeded test data** to delete the test group, its messages, and its test
+   summary. Your real data is never touched.
 
 ### Reset / cleanup (no SQL)
 

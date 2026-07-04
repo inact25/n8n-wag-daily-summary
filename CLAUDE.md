@@ -29,13 +29,20 @@ Setup is Form-based so users never touch `psql`:
 - **`wag-reset.json`** ("Reset / Cleanup") — `formTrigger` → IF (`Confirm == 'RESET'`) → `switch`
   (groups / messages / summaries / config / full) → `DELETE FROM …` → completion page. Deletes rows,
   keeps tables. Same setMsg/switchRule helpers as admin.
-- **`wag-data.json`** ("Data Browser (View)") — read-only inspector so users never run `SELECT`.
+- **`wag-data.json`** ("Data Browser & Test") — inspector so users never run `SELECT`.
   `formTrigger` (View dropdown + optional *Filter: Chat JID* + *Limit*) → `switch` (`viewRule` keyed
   on `$json.View`) → per-view Postgres `SELECT` → Code formatter → shared `form` completion page.
-  Views: Overview (counts/health), Registered groups (+per-group msg count & last activity),
-  Recent messages (JID filter, `LIMIT $2::int`), Daily summaries, go-wa config. Writes nothing.
-  Every SELECT is `alwaysOutputData: true` so an empty result still reaches its formatter (which
-  prints a "No …" message). The optional filter is `WHERE ($1 = '' OR chat_jid = $1)`.
+  Read views: Overview (counts/health), Registered groups (+per-group msg count & last activity),
+  Recent messages (JID filter, `LIMIT $2::int`), Daily summaries, go-wa config. Every SELECT is
+  `alwaysOutputData: true` so an empty result still reaches its formatter (which prints a "No …"
+  message). The optional filter is `WHERE ($1 = '' OR chat_jid = $1)`.
+  Two 🧪 **Test** actions are the only writes: *seed* registers a throwaway group
+  (`TEST_JID` = `120363000000000999@g.us`, name "🧪 Daily Summary TEST", recipient via
+  `COALESCE(wag_config.alert_to, first active group's send_to, default)`) plus 3 messages backdated
+  into **yesterday's** Asia/Jakarta window (`message_id` `wag-test-*`), so the real Daily Summary has
+  data to summarize and *send* when run manually; *remove* deletes exactly those rows
+  (`wag_messages WHERE message_id LIKE 'wag-test-%'`, and the test group's summaries/registry row).
+  Both are multi-statement `executeQuery`.
 
 `wag-setup`/`wag-admin` run the same DDL as `db/schema.sql` and the same `wag_groups` upsert
 (`upsertGroupQuery` in the generator) — keep all in sync if you change columns. `wag-data` is

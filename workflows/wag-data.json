@@ -1,11 +1,11 @@
 {
   "id": "wagData000000001",
-  "name": "WAG Chat — Data Browser (View)",
+  "name": "WAG Chat — Data Browser & Test",
   "nodes": [
     {
       "parameters": {
-        "formTitle": "WAG Chat — Data Browser",
-        "formDescription": "Read-only. Look at what is actually stored in Postgres — an overview, your registered groups, recent messages, daily summaries, or the go-wa config. Nothing is changed or deleted. \"Filter: Chat JID\" and \"Limit\" only apply to Recent messages / Daily summaries.",
+        "formTitle": "WAG Chat — Data Browser & Test",
+        "formDescription": "View what is stored in Postgres (overview, groups, messages, summaries, config) — read-only. The two 🧪 Test actions are the exception: \"seed\" registers a throwaway group with 3 messages backdated to yesterday so you can run the real Daily Summary and watch it send; \"remove\" deletes only that test data. \"Filter: Chat JID\" and \"Limit\" apply to Recent messages / Daily summaries.",
         "formFields": {
           "values": [
             {
@@ -28,6 +28,12 @@
                   },
                   {
                     "option": "go-wa config"
+                  },
+                  {
+                    "option": "🧪 Test: seed sample chat into yesterday"
+                  },
+                  {
+                    "option": "🧪 Test: remove seeded test data"
                   }
                 ]
               }
@@ -189,6 +195,52 @@
               },
               "renameOutput": true,
               "outputKey": "config"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.View }}",
+                    "rightValue": "🧪 Test: seed sample chat into yesterday",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "seed"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.View }}",
+                    "rightValue": "🧪 Test: remove seeded test data",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "clean"
             }
           ]
         },
@@ -384,6 +436,96 @@
     },
     {
       "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO wag_groups (chat_jid, project_name, send_to, active)\nVALUES ('120363000000000999@g.us', '🧪 Daily Summary TEST',\n        COALESCE((SELECT value FROM wag_config WHERE key = 'alert_to'),\n                 (SELECT send_to FROM wag_groups WHERE active ORDER BY created_at LIMIT 1),\n                 '6285609200000'), true)\nON CONFLICT (chat_jid) DO UPDATE SET project_name = EXCLUDED.project_name, send_to = EXCLUDED.send_to, active = true;\nINSERT INTO wag_messages (message_id, chat_jid, sender_jid, sender_name, message, is_group, \"timestamp\")\nVALUES\n  ('wag-test-1', '120363000000000999@g.us', 'tester1@lid', 'Tester Satu', 'Halo tim, ini pesan uji untuk ringkasan harian.', true, (date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta') - interval '1 day' + interval '9 hours')  AT TIME ZONE 'Asia/Jakarta'),\n  ('wag-test-2', '120363000000000999@g.us', 'tester2@lid', 'Tester Dua',  'Setuju, meeting jam 3 sore ya, tolong siapkan slide.',   true, (date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta') - interval '1 day' + interval '11 hours') AT TIME ZONE 'Asia/Jakarta'),\n  ('wag-test-3', '120363000000000999@g.us', 'tester1@lid', 'Tester Satu', 'Oke sudah saya siapkan. Deploy fitur baru selesai malam ini.', true, (date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta') - interval '1 day' + interval '14 hours') AT TIME ZONE 'Asia/Jakarta')\nON CONFLICT (message_id) DO NOTHING;",
+        "options": {}
+      },
+      "id": "dt-q-seed",
+      "name": "Seed Test Data",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        200,
+        450
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "dt-msg-seed-a",
+              "name": "resultMessage",
+              "type": "string",
+              "value": "✅ Seeded a throwaway group \"🧪 Daily Summary TEST\" with 3 messages backdated to YESTERDAY.\n\nNow open \"WAG Chat — Daily Summary\" and click \"Test workflow\" (top toolbar) — it will find this group, summarize it with Gemini, and send to your configured recipient.\n\nWhen you are done, come back here and run \"🧪 Test: remove seeded test data\" to clean up."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dt-msg-seed",
+      "name": "Msg: Seeded",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM wag_messages  WHERE message_id LIKE 'wag-test-%';\nDELETE FROM wag_summaries WHERE chat_jid = '120363000000000999@g.us';\nDELETE FROM wag_groups    WHERE chat_jid = '120363000000000999@g.us';",
+        "options": {}
+      },
+      "id": "dt-q-clean",
+      "name": "Clean Test Data",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        200,
+        600
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "dt-msg-clean-a",
+              "name": "resultMessage",
+              "type": "string",
+              "value": "🧹 Removed the test group, its 3 messages, and any test summary. Your real data is untouched."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dt-msg-clean",
+      "name": "Msg: Cleaned",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        600
+      ]
+    },
+    {
+      "parameters": {
         "operation": "completion",
         "completionTitle": "Data",
         "completionMessage": "={{ $json.resultMessage }}",
@@ -444,6 +586,20 @@
         [
           {
             "node": "Query Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Seed Test Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clean Test Data",
             "type": "main",
             "index": 0
           }
@@ -550,6 +706,50 @@
       ]
     },
     "Format Config": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seed Test Data": {
+      "main": [
+        [
+          {
+            "node": "Msg: Seeded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg: Seeded": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Test Data": {
+      "main": [
+        [
+          {
+            "node": "Msg: Cleaned",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg: Cleaned": {
       "main": [
         [
           {
