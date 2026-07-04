@@ -31,6 +31,9 @@
                   },
                   {
                     "option": "Remove group"
+                  },
+                  {
+                    "option": "Show raw go-wa group (debug names)"
                   }
                 ]
               }
@@ -229,6 +232,29 @@
               },
               "renameOutput": true,
               "outputKey": "remove"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Action }}",
+                    "rightValue": "Show raw go-wa group (debug names)",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "debug"
             }
           ]
         },
@@ -546,6 +572,51 @@
     },
     {
       "parameters": {
+        "method": "GET",
+        "url": "={{ ($('Admin Form').item.json['go-wa base URL'] || $env.GOWA_BASE_URL || 'http://localhost:3000').replace(/\\/$/, '') }}/user/my/groups",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Device-Id",
+              "value": "={{ ($('Admin Form').item.json['go-wa device id'] || $env.GOWA_DEVICE_ID || '') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ad-gowa-dbg",
+      "name": "go-wa: Raw Groups",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        650
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_WITH_GOWA_BASIC_CRED_ID",
+          "name": "go-wa basic auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\nconst res = r.results || r;\nlet arr = res.groups || res.data || (Array.isArray(res) ? res : []);\nif (!Array.isArray(arr)) arr = [];\nconst sample = arr.slice(0, 3);\nconst firstKeys = sample.length ? Object.keys(sample[0]) : [];\nconst resultMessage =\n  'go-wa returned ' + arr.length + ' groups.\\n' +\n  'Wrapper keys: ' + Object.keys(r).join(', ') + '\\n' +\n  'First group keys: ' + firstKeys.join(', ') + '\\n\\n' +\n  'First ' + sample.length + ' raw group object(s):\\n' +\n  JSON.stringify(sample, null, 2);\nreturn [{ json: { resultMessage } }];"
+      },
+      "id": "ad-fmt-dbg",
+      "name": "Raw Groups Debug",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        650
+      ]
+    },
+    {
+      "parameters": {
         "operation": "completion",
         "completionTitle": "Done",
         "completionMessage": "={{ $json.resultMessage }}",
@@ -613,6 +684,13 @@
         [
           {
             "node": "Delete Group",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "go-wa: Raw Groups",
             "type": "main",
             "index": 0
           }
@@ -763,6 +841,28 @@
       ]
     },
     "Msg: Removed": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "go-wa: Raw Groups": {
+      "main": [
+        [
+          {
+            "node": "Raw Groups Debug",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Raw Groups Debug": {
       "main": [
         [
           {
