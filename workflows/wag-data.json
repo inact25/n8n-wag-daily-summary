@@ -1,0 +1,570 @@
+{
+  "id": "wagData000000001",
+  "name": "WAG Chat — Data Browser (View)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "WAG Chat — Data Browser",
+        "formDescription": "Read-only. Look at what is actually stored in Postgres — an overview, your registered groups, recent messages, daily summaries, or the go-wa config. Nothing is changed or deleted. \"Filter: Chat JID\" and \"Limit\" only apply to Recent messages / Daily summaries.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "View",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Overview (counts & health)"
+                  },
+                  {
+                    "option": "Registered groups"
+                  },
+                  {
+                    "option": "Recent messages"
+                  },
+                  {
+                    "option": "Daily summaries"
+                  },
+                  {
+                    "option": "go-wa config"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Filter: Chat JID",
+              "fieldType": "text",
+              "placeholder": "optional — 1203...@g.us (Recent messages / Daily summaries)"
+            },
+            {
+              "fieldLabel": "Limit",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "50"
+                  },
+                  {
+                    "option": "100"
+                  },
+                  {
+                    "option": "200"
+                  },
+                  {
+                    "option": "500"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dt-form",
+      "name": "Data Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -320,
+        0
+      ],
+      "webhookId": "wag-data-form"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.View }}",
+                    "rightValue": "Overview (counts & health)",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "overview"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.View }}",
+                    "rightValue": "Registered groups",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "groups"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.View }}",
+                    "rightValue": "Recent messages",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "messages"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.View }}",
+                    "rightValue": "Daily summaries",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "summaries"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.View }}",
+                    "rightValue": "go-wa config",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "config"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dt-switch",
+      "name": "Route View",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -80,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT count(*) FROM wag_groups)                    AS groups_total,\n  (SELECT count(*) FROM wag_groups WHERE active)       AS groups_active,\n  (SELECT count(*) FROM wag_messages)                  AS messages_total,\n  (SELECT count(*) FROM wag_messages\n     WHERE (\"timestamp\" AT TIME ZONE 'Asia/Jakarta') >= date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta'))                     AS messages_today,\n  (SELECT count(*) FROM wag_messages\n     WHERE (\"timestamp\" AT TIME ZONE 'Asia/Jakarta') >= date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta') - interval '1 day'\n       AND (\"timestamp\" AT TIME ZONE 'Asia/Jakarta') <  date_trunc('day', now() AT TIME ZONE 'Asia/Jakarta'))                     AS messages_yesterday,\n  (SELECT max(\"timestamp\") FROM wag_messages)          AS last_message_at,\n  (SELECT count(*) FROM wag_summaries)                 AS summaries_total,\n  (SELECT count(*) FROM wag_summaries\n     WHERE summary_date = ((now() AT TIME ZONE 'Asia/Jakarta') - interval '1 day')::date)                                          AS summaries_yesterday",
+        "options": {}
+      },
+      "id": "dt-q-ov",
+      "name": "Query Overview",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        200,
+        -300
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json || {};\nconst f = v => (v === null || v === undefined) ? '-' : String(v);\nconst dt = v => v ? new Date(v).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' }) : '-';\nconst resultMessage =\n  '📊 WAG Chat — Overview\\n\\n' +\n  'Groups: ' + f(r.groups_total) + ' total, ' + f(r.groups_active) + ' active\\n' +\n  'Messages: ' + f(r.messages_total) + ' total\\n' +\n  '  • today: ' + f(r.messages_today) + '\\n' +\n  '  • yesterday: ' + f(r.messages_yesterday) + '\\n' +\n  '  • last message: ' + dt(r.last_message_at) + '\\n\\n' +\n  'Summaries: ' + f(r.summaries_total) + ' total, ' + f(r.summaries_yesterday) + ' for yesterday';\nreturn [{ json: { resultMessage } }];"
+      },
+      "id": "dt-f-ov",
+      "name": "Format Overview",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT g.chat_jid, g.project_name, g.send_to, g.active,\n  (SELECT count(*)        FROM wag_messages m WHERE m.chat_jid = g.chat_jid) AS msg_count,\n  (SELECT max(\"timestamp\") FROM wag_messages m WHERE m.chat_jid = g.chat_jid) AS last_msg\nFROM wag_groups g\nORDER BY g.project_name",
+        "options": {}
+      },
+      "id": "dt-q-grp",
+      "name": "Query Groups",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        200,
+        -150
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json).filter(r => r && r.chat_jid);\nconst dt = v => v ? new Date(v).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'short', timeStyle: 'short' }) : 'no messages yet';\nconst resultMessage = rows.length\n  ? ('👥 Registered groups (' + rows.length + '):\\n\\n' + rows.map(r =>\n      (r.active ? '🟢' : '⚪') + ' ' + r.project_name + '\\n' +\n      '    ' + r.chat_jid + '  →  ' + r.send_to + '\\n' +\n      '    ' + (r.msg_count || 0) + ' msgs · last: ' + dt(r.last_msg)).join('\\n\\n'))\n  : 'No groups registered yet. Use Quick Setup or the Admin workflow.';\nreturn [{ json: { resultMessage } }];"
+      },
+      "id": "dt-f-grp",
+      "name": "Format Groups",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        -150
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT chat_jid, sender_name, message, media_type, \"timestamp\"\nFROM wag_messages\nWHERE ($1 = '' OR chat_jid = $1)\nORDER BY \"timestamp\" DESC\nLIMIT $2::int",
+        "options": {
+          "queryReplacement": "={{ [ ($('Data Form').item.json['Filter: Chat JID'] || ''), Number($('Data Form').item.json['Limit'] || 50) ] }}"
+        }
+      },
+      "id": "dt-q-msg",
+      "name": "Query Messages",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        200,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json).filter(r => r && r.chat_jid);\nconst t = v => v ? new Date(v).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'short', timeStyle: 'short' }) : '';\nconst body = rows.map(r => {\n  const txt = (r.message && String(r.message).trim()) ? r.message : (r.media_type ? '[' + r.media_type + ']' : '(empty)');\n  return '[' + t(r.timestamp) + '] ' + (r.sender_name || 'Unknown') + ': ' + txt;\n});\nconst resultMessage = rows.length\n  ? ('💬 Recent messages (' + rows.length + ', newest first):\\n\\n' + body.join('\\n'))\n  : 'No messages match. Clear the Chat JID filter to see all, or wait for ingest.';\nreturn [{ json: { resultMessage } }];"
+      },
+      "id": "dt-f-msg",
+      "name": "Format Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT chat_jid, summary_date, status, message_count, member_count, summary_text\nFROM wag_summaries\nWHERE ($1 = '' OR chat_jid = $1)\nORDER BY summary_date DESC, chat_jid\nLIMIT $2::int",
+        "options": {
+          "queryReplacement": "={{ [ ($('Data Form').item.json['Filter: Chat JID'] || ''), Number($('Data Form').item.json['Limit'] || 50) ] }}"
+        }
+      },
+      "id": "dt-q-sum",
+      "name": "Query Summaries",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        200,
+        150
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json).filter(r => r && r.chat_jid);\nconst resultMessage = rows.length\n  ? ('🗒️ Daily summaries (' + rows.length + ', newest first):\\n\\n' + rows.map(r => {\n      const head = String(r.summary_text || '').split('\\n')[0];\n      const d = String(r.summary_date).slice(0, 10);\n      return d + '  [' + r.status + ']  ' + r.chat_jid + '\\n' +\n             '    ' + (r.message_count || 0) + ' msgs · ' + (r.member_count || 0) + ' members' +\n             (head ? '\\n    ' + head : '');\n    }).join('\\n\\n'))\n  : 'No summaries logged yet. They appear after the daily run.';\nreturn [{ json: { resultMessage } }];"
+      },
+      "id": "dt-f-sum",
+      "name": "Format Summaries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT key, value FROM wag_config ORDER BY key",
+        "options": {}
+      },
+      "id": "dt-q-cfg",
+      "name": "Query Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        200,
+        300
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_POSTGRES_CRED_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json).filter(r => r && r.key);\nconst resultMessage = rows.length\n  ? ('⚙️ Config (wag_config):\\n\\n' + rows.map(r => r.key + ' = ' + (r.value ? r.value : '(blank)')).join('\\n'))\n  : 'No config rows yet. Quick Setup writes gowa_base_url / gowa_device_id / alert_to.';\nreturn [{ json: { resultMessage } }];"
+      },
+      "id": "dt-f-cfg",
+      "name": "Format Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Data",
+        "completionMessage": "={{ $json.resultMessage }}",
+        "options": {}
+      },
+      "id": "dt-result",
+      "name": "Result",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        680,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Data Form": {
+      "main": [
+        [
+          {
+            "node": "Route View",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route View": {
+      "main": [
+        [
+          {
+            "node": "Query Overview",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Query Groups",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Query Messages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Query Summaries",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Query Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Overview": {
+      "main": [
+        [
+          {
+            "node": "Format Overview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Groups": {
+      "main": [
+        [
+          {
+            "node": "Format Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Messages": {
+      "main": [
+        [
+          {
+            "node": "Format Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Summaries": {
+      "main": [
+        [
+          {
+            "node": "Format Summaries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Config": {
+      "main": [
+        [
+          {
+            "node": "Format Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Overview": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Groups": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Messages": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Summaries": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Config": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta"
+  },
+  "pinData": {}
+}

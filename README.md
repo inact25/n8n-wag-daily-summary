@@ -144,7 +144,8 @@ return "all of today's messages" in a single call. They communicate through thre
 │   ├── wag-chat-ingest.json     # go-wa webhook → normalize → Postgres (dedupe)
 │   ├── wag-daily-summary.json   # schedule 07:00 → loop groups → Gemini → send → log
 │   ├── wag-error-alert.json     # Error Trigger → WhatsApp alert to admin
-│   └── wag-reset.json           # Form: wipe groups/messages/summaries/config (typed confirm)
+│   ├── wag-reset.json           # Form: wipe groups/messages/summaries/config (typed confirm)
+│   └── wag-data.json            # Data Browser form: view groups/messages/summaries/config (read-only)
 ├── db/
 │   └── schema.sql               # wag_groups, wag_messages, wag_summaries (optional; wizard does this)
 ├── docker-compose.yml           # full stack: Postgres + go-wa + n8n, pre-wired
@@ -235,6 +236,7 @@ n8n import:workflow --input=workflows/wag-chat-ingest.json
 n8n import:workflow --input=workflows/wag-daily-summary.json
 n8n import:workflow --input=workflows/wag-error-alert.json
 n8n import:workflow --input=workflows/wag-reset.json
+n8n import:workflow --input=workflows/wag-data.json
 ```
 
 Each workflow has a stable ID, so re-importing later **updates it in place** instead of creating a
@@ -403,6 +405,21 @@ UPDATE wag_groups SET send_to = '6281234567890' WHERE chat_jid = '1203...@g.us';
 -- Remove a group entirely
 DELETE FROM wag_groups WHERE chat_jid = '1203...@g.us';
 ```
+
+### View your data (no SQL)
+
+Don't want to run `SELECT`s? Import **`wag-data.json`** and open **WAG Chat — Data Browser**. It's a
+read-only form — pick a **View** and submit; nothing is ever written or deleted:
+
+- **Overview (counts & health)** — totals for groups/messages/summaries, messages today vs.
+  yesterday, and the time of the last message received (quick "is ingest working?" check).
+- **Registered groups** — every row in `wag_groups` with an 🟢/⚪ active flag, its recipient, how
+  many messages it has, and when the last one arrived.
+- **Recent messages** — latest messages newest-first; optional **Filter: Chat JID** to narrow to one
+  group and **Limit** (50–500). Media shows as `[image]`/`[video]`/…
+- **Daily summaries** — the `wag_summaries` audit trail: date, status (`success`/`empty`/`error`),
+  counts, and the first line of each sent summary.
+- **go-wa config** — the `wag_config` key/values the workflows read.
 
 ### Reset / cleanup (no SQL)
 

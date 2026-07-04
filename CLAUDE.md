@@ -29,9 +29,17 @@ Setup is Form-based so users never touch `psql`:
 - **`wag-reset.json`** ("Reset / Cleanup") — `formTrigger` → IF (`Confirm == 'RESET'`) → `switch`
   (groups / messages / summaries / config / full) → `DELETE FROM …` → completion page. Deletes rows,
   keeps tables. Same setMsg/switchRule helpers as admin.
+- **`wag-data.json`** ("Data Browser (View)") — read-only inspector so users never run `SELECT`.
+  `formTrigger` (View dropdown + optional *Filter: Chat JID* + *Limit*) → `switch` (`viewRule` keyed
+  on `$json.View`) → per-view Postgres `SELECT` → Code formatter → shared `form` completion page.
+  Views: Overview (counts/health), Registered groups (+per-group msg count & last activity),
+  Recent messages (JID filter, `LIMIT $2::int`), Daily summaries, go-wa config. Writes nothing.
+  Every SELECT is `alwaysOutputData: true` so an empty result still reaches its formatter (which
+  prints a "No …" message). The optional filter is `WHERE ($1 = '' OR chat_jid = $1)`.
 
-Both run the same DDL as `db/schema.sql` and the same `wag_groups` upsert (`upsertGroupQuery` in the
-generator) — keep all three in sync if you change columns.
+`wag-setup`/`wag-admin` run the same DDL as `db/schema.sql` and the same `wag_groups` upsert
+(`upsertGroupQuery` in the generator) — keep all in sync if you change columns. `wag-data` is
+read-only; if you rename a `wag_*` column, update its SELECTs/formatters too.
 
 ```
  wag-chat-ingest.json                         wag-daily-summary.json
@@ -99,8 +107,8 @@ generator) — keep all three in sync if you change columns.
    ("Manage Groups (Advanced)"). Both are equivalent to running `db/schema.sql` and `INSERT`ing into
    `wag_groups` by hand (still supported for SQL-first setups).
 2. Create three n8n credentials and map them onto the placeholder-credential nodes:
-   - **Postgres** — on the admin nodes plus `Upsert Message`, `Get Active Groups`,
-     `Get Today's Messages`, `Log Summary`.
+   - **Postgres** — on the admin nodes, the five `wag-data` `Query *` nodes, plus `Upsert Message`,
+     `Get Active Groups`, `Get Today's Messages`, `Log Summary`.
    - **Google Gemini (PaLM) API** (an API key from Google AI Studio) — on the
      `Google Gemini Chat Model` sub-node.
    - **HTTP Basic Auth** for go-wa — on `Send via go-wa`, `Send Alert via go-wa`, and the admin
