@@ -128,6 +128,14 @@ read-only; if you rename a `wag_*` column, update its SELECTs/formatters too.
 
 ## Setup / configuration checklist
 
+**Local full stack:** `docker-compose.yml` brings up Postgres + go-wa + n8n pre-wired (`cp
+.env.example .env`, edit secrets, `docker compose up -d` → n8n on :5678, go-wa on :3000 for the
+login QR). Inside the compose network n8n reaches go-wa at `http://gowa:3000` and the go-wa
+`--webhook` flag is already pointed at `http://n8n:5678/webhook/wag-incoming`. It sets
+`N8N_BLOCK_ENV_ACCESS_IN_NODE=false` so the `$env.*` fallbacks work; a hand-installed n8n that
+blocks env access is exactly why config also lives in `wag_config` (see below). You still do the
+credential-mapping and workflow-import steps that follow.
+
 1. Preferred: import `wag-setup.json` ("Quick Setup"), run it, enter the recipient number, submit —
    it installs the schema and registers every go-wa group. For per-group control use `wag-admin.json`
    ("Manage Groups (Advanced)"). Both are equivalent to running `db/schema.sql` and `INSERT`ing into
